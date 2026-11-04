@@ -27,7 +27,7 @@ How it works:
 - Saving grades needs one of: `free_forever`, `paid_at`, an active trial (plus 12 hours while the charge goes through), or a cancelled trial that hasn't ended yet. Reading, deleting, and downloading grades always work.
 - `supabase/functions/lemon-webhook` gets Lemon Squeezy's events, checks the signature, and updates `access`. After the $5 charge it cancels the subscription through the Lemon Squeezy API.
 - `supabase/functions/cancel-trial` runs when someone taps Cancel free trial in Settings.
-- `terms.html` and `privacy.html` are the Terms and Privacy Policy. Their contact address is support@gradebook.fun.
+- `terms.html` and `privacy.html` are the Terms and Privacy Policy. Their contact address is beckettdunne@gmail.com.
 
 Two accounts are free forever: beckettdunne@gmail.com and 29baberke@ecfs.org. To give someone else free access for good, run this in the SQL Editor with their email:
 

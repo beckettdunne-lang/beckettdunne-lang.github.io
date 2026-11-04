@@ -13,4 +13,4 @@ window.GB_SUPABASE = {
 // Lemon Squeezy dashboard > Products > Grade Book > Share, then copy the checkout link.
 // It looks like https://YOURSTORE.lemonsqueezy.com/buy/1234abcd-....
 // While this is empty, the app shows "Buying Grade Book opens soon" instead of a Buy button.
-window.GB_CHECKOUT = "";
+window.GB_CHECKOUT = "https://gradebook.lemonsqueezy.com/checkout/buy/912bb9a4-7220-40c7-a7e9-e701b27f7695";

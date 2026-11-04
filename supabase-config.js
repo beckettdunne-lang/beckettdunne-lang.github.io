@@ -8,3 +8,9 @@ window.GB_SUPABASE = {
   url: "https://fnbcebulnbhsgpgynbon.supabase.co",
   key: "sb_publishable_20xxW3icj2l9oVubwAggDA_AhR9hwBU"
 };
+
+// Lemon Squeezy checkout link for the $5 one-time purchase.
+// Lemon Squeezy dashboard > Products > Grade Book > Share, then copy the checkout link.
+// It looks like https://YOURSTORE.lemonsqueezy.com/buy/1234abcd-....
+// While this is empty, the app shows "Buying Grade Book opens soon" instead of a Buy button.
+window.GB_CHECKOUT = "";

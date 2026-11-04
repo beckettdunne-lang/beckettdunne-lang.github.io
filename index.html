@@ -357,9 +357,9 @@ function guestPay(){
   return {guest:true,paid:false,ends:st+TRIAL_DAYS*864e5};
 }
 async function loadAccess(u){
-  const {data,error}=await sb.from('access').select('trial_ends_at,paid_at').eq('user_id',u.id).maybeSingle();
+  const {data,error}=await sb.from('access').select('trial_ends_at,paid_at,free_forever').eq('user_id',u.id).maybeSingle();
   if(error) return;
-  ui.pay=data?{paid:!!data.paid_at,ends:Date.parse(data.trial_ends_at)}:{paid:false,ends:(Date.parse(u.created_at)||Date.now())+TRIAL_DAYS*864e5};
+  ui.pay=data?{paid:!!(data.paid_at||data.free_forever),ends:Date.parse(data.trial_ends_at),free:!!data.free_forever}:{paid:false,ends:(Date.parse(u.created_at)||Date.now())+TRIAL_DAYS*864e5};
 }
 function checkoutUrl(){
   const q=[['checkout[custom][user_id]',curUid],['checkout[email]',ui.acct&&ui.acct.email],['checkout[name]',ui.acct&&ui.acct.name]].filter(([,v])=>v).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
@@ -723,7 +723,7 @@ function paywallView(){
 }
 function trialRow(compact){
   if(!ui.pay) return '';
-  if(ui.pay.paid) return compact?'':`<div class="row"><span class="main"><div class="t">Grade Book is paid for</div><div class="s">Thanks for buying it. You have it for good.</div></span></div>`;
+  if(ui.pay.paid) return compact?'':`<div class="row"><span class="main"><div class="t">${ui.pay.free?'Grade Book is free for you':'Grade Book is paid for'}</div><div class="s">${ui.pay.free?'Your account has free access for good.':'Thanks for buying it. You have it for good.'}</div></span></div>`;
   const n=trialLeft(), g=ui.pay.guest, can=g||CHECKOUT;
   const t=n<=1?'Your free trial ends today':`${n} days left in your free trial`;
   const sub=g?`Ends ${trialEndStr()}. Then you'll need an account and a one-time ${PRICE} purchase.`:`Ends ${trialEndStr()}. Buy Grade Book once for ${PRICE} to keep using it.`;

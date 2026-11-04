@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   if (event === "order_refunded") {
     const { error } = await db.from("access")
       .update({ paid_at: null, note: "refunded" })
-      .eq("user_id", userId).eq("order_id", orderId);
+      .eq("user_id", userId).eq("order_id", orderId).eq("free_forever", false);
     if (error) { console.error("refund failed", error); return reply(500, "Could not save"); }
     return reply(200, "Marked refunded");
   }

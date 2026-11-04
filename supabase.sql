@@ -76,3 +76,27 @@ create policy "Update own grades" on public.gradebooks
     and exists (select 1 from public.access a
                 where a.user_id = (select auth.uid())
                   and (a.paid_at is not null or a.trial_ends_at > now())));
+
+-- ---------- Accounts that are free forever ----------
+-- Set free_forever = true to give an account free access for good. A refund never removes it.
+alter table public.access add column if not exists free_forever boolean not null default false;
+
+update public.access a
+set free_forever = true, paid_at = coalesce(a.paid_at, now()), note = 'free forever'
+from auth.users u
+where u.id = a.user_id and lower(u.email) in ('29baberke@ecfs.org', 'beckettdunne@gmail.com');
+
+drop policy if exists "Add own grades" on public.gradebooks;
+drop policy if exists "Update own grades" on public.gradebooks;
+create policy "Add own grades" on public.gradebooks
+  for insert to authenticated with check (
+    (select auth.uid()) = user_id
+    and exists (select 1 from public.access a
+                where a.user_id = (select auth.uid())
+                  and (a.free_forever or a.paid_at is not null or a.trial_ends_at > now())));
+create policy "Update own grades" on public.gradebooks
+  for update to authenticated using ((select auth.uid()) = user_id) with check (
+    (select auth.uid()) = user_id
+    and exists (select 1 from public.access a
+                where a.user_id = (select auth.uid())
+                  and (a.free_forever or a.paid_at is not null or a.trial_ends_at > now())));

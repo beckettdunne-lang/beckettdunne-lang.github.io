@@ -26,11 +26,11 @@ How it works:
 - `supabase/functions/lemon-webhook` is a Supabase Edge Function. Lemon Squeezy calls it after a purchase or refund. It checks the signature, then sets or clears `paid_at`.
 - The Buy button opens the checkout link in `supabase-config.js` with the account's ID attached, so the webhook knows which account paid.
 
-To give someone free access, run this in the SQL Editor with their email:
+Two accounts are free forever: beckettdunne@gmail.com and 29baberke@ecfs.org. To give someone else free access for good, run this in the SQL Editor with their email:
 
 ```sql
-update public.access set paid_at = now(), note = 'gift'
-where user_id = (select id from auth.users where email = 'friend@example.com');
+update public.access set free_forever = true, paid_at = coalesce(paid_at, now()), note = 'free forever'
+where user_id = (select id from auth.users where lower(email) = 'friend@example.com');
 ```
 
 ### Set up Lemon Squeezy

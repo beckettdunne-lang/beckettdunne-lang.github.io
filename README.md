@@ -17,14 +17,17 @@ Email confirmation is on by default, so new users confirm their email before the
 
 ## Free trial and the $5 purchase
 
-New accounts get a 14-day free trial. After that, Grade Book costs $5, paid once through Lemon Squeezy. Accounts made before payments started are marked as paid. "Use without an account" also gets a 14-day trial on that device. After it ends, the person needs to make an account and buy.
+People make an account, then add a card at checkout to start a 3-day free trial. When the trial ends, the card is charged $5 one time, unless they cancelled in Settings. There's no way to use Grade Book without an account.
+
+Lemon Squeezy only allows card-first trials on subscriptions. So the product is a $5 yearly subscription with a 3-day trial, and the webhook cancels the subscription right after the $5 charge so it never renews.
 
 How it works:
 
-- `supabase.sql` makes the `access` table. Each account gets a row with `trial_ends_at` and `paid_at` when it's created. People can read their own row but can't change it.
-- Saving grades to an account needs `paid_at` set or a trial that hasn't ended. Reading, deleting, and downloading grades always work.
-- `supabase/functions/lemon-webhook` is a Supabase Edge Function. Lemon Squeezy calls it after a purchase or refund. It checks the signature, then sets or clears `paid_at`.
-- The Buy button opens the checkout link in `supabase-config.js` with the account's ID attached, so the webhook knows which account paid.
+- `supabase.sql` makes the `access` table: one row per account with the trial end date, subscription status, and `paid_at`. People can read their own row but can't change it.
+- Saving grades needs one of: `free_forever`, `paid_at`, an active trial (plus 12 hours while the charge goes through), or a cancelled trial that hasn't ended yet. Reading, deleting, and downloading grades always work.
+- `supabase/functions/lemon-webhook` gets Lemon Squeezy's events, checks the signature, and updates `access`. After the $5 charge it cancels the subscription through the Lemon Squeezy API.
+- `supabase/functions/cancel-trial` runs when someone taps Cancel free trial in Settings.
+- `terms.html` and `privacy.html` are the Terms and Privacy Policy. Their contact address is support@gradebook.fun.
 
 Two accounts are free forever: beckettdunne@gmail.com and 29baberke@ecfs.org. To give someone else free access for good, run this in the SQL Editor with their email:
 
@@ -37,14 +40,19 @@ where user_id = (select id from auth.users where lower(email) = 'friend@example.
 
 The Lemon Squeezy account must belong to someone 18 or older.
 
-1. **Store:** make a store at https://lemonsqueezy.com. Test mode works right away. Real payments start after Lemon Squeezy approves the store.
-2. **Product:** Products > New product. Name it Grade Book, choose **Single payment**, and set the price to $5. Under **Confirmation modal**, set the button link to `https://gradebook.fun/?paid=1`.
-3. **Checkout link:** on the product, click Share and copy the checkout link. Paste it into `window.GB_CHECKOUT` in `supabase-config.js`.
-4. **Webhook:** Settings > Webhooks > add one.
+1. **Product:** Products > New product. Name it Grade Book and choose **Subscription**. Set the price to $5, billed every **year**, and turn on a **free trial** of **3 days**. Under **Confirmation modal**, set the button link to `https://gradebook.fun/?paid=1`.
+2. **Checkout link:** on the product, click Share and copy the link. Put it in `window.GB_CHECKOUT` in `supabase-config.js`.
+3. **Webhook:** Settings > Webhooks.
    - URL: `https://fnbcebulnbhsgpgynbon.supabase.co/functions/v1/lemon-webhook`
-   - Signing secret: make up a long random password and keep a copy.
-   - Events: `order_created` and `order_refunded`.
-5. **Secret:** in Supabase, go to Edge Functions > Secrets. Add `LEMONSQUEEZY_WEBHOOK_SECRET` with the same signing secret.
+   - Signing secret: a long random password.
+   - Events: `order_created`, `order_refunded`, `subscription_created`, `subscription_updated`, `subscription_payment_success`, `subscription_payment_refunded`.
+4. **API key:** Settings > API > new key. Test mode and live mode have separate keys.
+5. **Secrets:** in Supabase, Edge Functions > Secrets:
+   - `LEMONSQUEEZY_WEBHOOK_SECRET`: the signing secret from step 3.
+   - `LEMONSQUEEZY_TEST_API_KEY`: the test-mode API key.
+   - `LEMONSQUEEZY_API_KEY`: the live-mode API key, once the store is live.
+
+Test mode and live mode each need their own product, webhook, and API key.
 
 ## Move grades from the Claude version
 

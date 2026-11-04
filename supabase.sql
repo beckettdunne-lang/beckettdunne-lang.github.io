@@ -100,3 +100,51 @@ create policy "Update own grades" on public.gradebooks
     and exists (select 1 from public.access a
                 where a.user_id = (select auth.uid())
                   and (a.free_forever or a.paid_at is not null or a.trial_ends_at > now())));
+
+-- ---------- 3-day free trial with a card first ----------
+-- The product in Lemon Squeezy is a $5 yearly subscription with a 3-day free trial.
+-- lemon-webhook records the subscription here and cancels it right after the $5 charge,
+-- so the charge happens once. New accounts get no free time until checkout.
+alter table public.access
+  add column if not exists sub_id text,
+  add column if not exists sub_status text,
+  add column if not exists test_mode boolean not null default false,
+  add column if not exists portal_url text;
+
+alter table public.access alter column trial_ends_at set default now();
+
+create or replace function public.start_trial()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.access (user_id, trial_ends_at)
+  values (new.id, now())
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+revoke execute on function public.start_trial() from public, anon, authenticated;
+
+-- Saving needs: free forever, paid, an active subscription, a trial that hasn't ended
+-- (plus 12 hours while the $5 charge goes through), or a cancelled trial that hasn't ended.
+drop policy if exists "Add own grades" on public.gradebooks;
+drop policy if exists "Update own grades" on public.gradebooks;
+create policy "Add own grades" on public.gradebooks
+  for insert to authenticated with check (
+    (select auth.uid()) = user_id
+    and exists (select 1 from public.access a
+                where a.user_id = (select auth.uid())
+                  and (a.free_forever or a.paid_at is not null or a.sub_status = 'active'
+                       or (a.sub_status = 'on_trial' and a.trial_ends_at + interval '12 hours' > now())
+                       or (a.sub_status = 'cancelled' and a.trial_ends_at > now()))));
+create policy "Update own grades" on public.gradebooks
+  for update to authenticated using ((select auth.uid()) = user_id) with check (
+    (select auth.uid()) = user_id
+    and exists (select 1 from public.access a
+                where a.user_id = (select auth.uid())
+                  and (a.free_forever or a.paid_at is not null or a.sub_status = 'active'
+                       or (a.sub_status = 'on_trial' and a.trial_ends_at + interval '12 hours' > now())
+                       or (a.sub_status = 'cancelled' and a.trial_ends_at > now()))));

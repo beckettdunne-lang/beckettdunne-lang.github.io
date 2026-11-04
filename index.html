@@ -250,6 +250,13 @@ mark{background:rgba(255,204,0,.38);color:inherit;border-radius:3px;padding:0 1p
 .rc-prev{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--sep);box-shadow:var(--shadow);background:#fff}
 .rc-acts{display:flex;gap:10px;flex-wrap:wrap}
 @media (max-width:420px){.tile b{font-size:22px}.tile{padding:12px}.spark{width:60px}}
+/* Sign-in and setup fields read left to right */
+#au-f .fr input,#su-n{text-align:left}
+#au-f .fr label{min-width:92px}
+/* Grade-up celebration */
+#confetti{position:fixed;inset:0;z-index:39;pointer-events:none}
+.toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;padding:10px 18px;border-radius:999px;background:var(--fg);color:var(--bg);font-weight:600;font-size:15px;box-shadow:var(--shadow);pointer-events:none;width:max-content;max-width:calc(100vw - 32px);text-align:center;animation:toast 3.2s ease forwards}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,-12px)}8%,85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-12px)}}
 @keyframes up{from{transform:translateY(100%)}}
 @keyframes fade{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -301,6 +308,7 @@ function fresh(){const sem=sample();return {v:1,updatedAt:0,name:'',curSem:sem.i
 let S=null, lkey=KEY+'.local';
 const ui={route:{view:'loading'},wi:false,sync:'device',msg:'',range:'sem',focus:null,from:'dash',auth:{mode:'in',msg:'',email:''},acct:null,setup:null,carry:null};
 function loadLocal(k){lkey=k; S=null; try{const raw=localStorage.getItem(k); if(raw) S=JSON.parse(raw);}catch(e){} if(S&&!Array.isArray(S.semesters)) S=null;}
+const firstName=()=>String((S&&S.name)||'').trim().split(/\s+/)[0]||'';
 const defaultCats=()=>[['Homework',20],['Quizzes',20],['Tests',35],['Final exam',25]].map(([name,weight])=>({id:uid(),name,weight,items:[]}));
 const pad2=n=>String(n).padStart(2,'0');
 const dstr=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
@@ -336,7 +344,7 @@ let sb=null, curUid=null;
 const isGate=v=>v==='loading'||v==='auth'||v==='setup';
 function afterLoad(){
   if(!S){ ui.setup=ui.setup||{name:'',classes:['','','']}; ui.route={view:'setup'}; }
-  else { migrate(); if(syncSeen()) save(); if(isGate(ui.route.view)) ui.route={view:'dash'}; }
+  else { migrate(); if(ui.acct&&ui.acct.name&&S.name!==ui.acct.name){ S.name=ui.acct.name; save(); } if(syncSeen()) save(); if(isGate(ui.route.view)) ui.route={view:'dash'}; }
   render();
 }
 function useLocal(){
@@ -373,11 +381,11 @@ async function onUser(u){
     let m=null; try{m=localStorage.getItem(KEY+'.mode');}catch(e){}
     if(m==='local'){ useLocal(); return; }
     if(ui.route.view==='auth'&&ui.auth.mode==='newpw') return;
-    S=null; ui.acct=null; ui.setup=null; ui.auth={mode:'in',msg:ui.auth.keep?ui.auth.msg:'',ok:ui.auth.keep?ui.auth.ok:false,email:ui.auth.email||''}; ui.route={view:'auth'}; render(); return;
+    S=null; ui.acct=null; ui.setup=null; ui.auth={mode:'in',msg:'',ok:false,email:ui.auth.email||''}; ui.route={view:'auth'}; render(); return;
   }
   curUid=u.id;
   try{localStorage.removeItem(KEY+'.mode');}catch(e){}
-  ui.acct={email:u.email||'',name:''}; ui.route={view:'loading'}; render();
+  ui.acct={email:u.email||'',name:String((u.user_metadata&&u.user_metadata.name)||'').trim()}; ui.route={view:'loading'}; render();
   loadLocal(KEY+'.u.'+u.id);
   const r={set:async o=>{const {error}=await sb.from('gradebooks').upsert({user_id:curUid,json:o.json,updated_at:o.updatedAt}); if(error) throw error;}};
   try{
@@ -411,7 +419,8 @@ function authErr(e){
 }
 async function authSubmit(){
   if(!sb) return;
-  const m=ui.auth.mode, email=val('au-e'), pwEl=document.getElementById('au-p'), pw=pwEl?pwEl.value:'';
+  const m=ui.auth.mode, email=val('au-e'), pwEl=document.getElementById('au-p'), pw=pwEl?pwEl.value:'', name=val('au-n');
+  if(m==='up'){ ui.auth.name=name; if(!name){authMsg('Enter your name.');return;} }
   if(m!=='newpw'){ ui.auth.email=email; if(!email){authMsg('Enter your email.');return;} }
   if(m!=='reset'&&!pw){authMsg(m==='newpw'?'Enter a new password.':'Enter your password.');return;}
   if((m==='up'||m==='newpw')&&pw.length<6){authMsg('Passwords need at least 6 characters.');return;}
@@ -425,7 +434,7 @@ async function authSubmit(){
       const {data}=await sb.auth.getSession(); history.replaceState(null,'',location.pathname);
       ui.auth={mode:'in',msg:'',email:''}; onUser(data&&data.session?data.session.user:null);
     } else if(m==='up'){
-      const {data,error}=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:APP_URL}}); if(error) throw error;
+      const {data,error}=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:APP_URL,data:{name}}}); if(error) throw error;
       if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length) throw {code:'user_already_exists'};
       if(!data.session){ ui.auth={mode:'in',email,msg:'Almost done. Open the link we emailed to '+email+' to confirm your account, then sign in here.',ok:true}; render(); }
     } else {
@@ -433,6 +442,12 @@ async function authSubmit(){
     }
   }catch(e){ authMsg(authErr(e)); }
   const b2=document.querySelector('[data-act="auGo"]'); if(b2) b2.disabled=false;
+}
+async function saveName(){
+  const name=val('acct-n'), msg=t=>{const el=document.getElementById('acct-msg'); if(el) el.textContent=t;};
+  if(!name){msg('Enter your name.');return;}
+  try{ const {error}=await sb.auth.updateUser({data:{name}}); if(error) throw error; ui.acct.name=name; S.name=name; save(); render(); }
+  catch(e){ msg('Could not save your name. Check your connection and try again.'); }
 }
 async function signOutNow(){
   if(!sb) return;
@@ -445,7 +460,7 @@ function setupDone(){
   if(!names.length){ const el=document.getElementById('su-msg'); if(el) el.textContent='Add at least one class, or tap Try example classes.'; return; }
   const d=new Date(), semName=(d.getMonth()>=6?'Fall ':'Spring ')+d.getFullYear();
   const sm={id:uid(),name:semName,classes:names.map((n,i)=>({id:uid(),name:n,credits:1,color:COLORS[i%COLORS.length],mode:'weighted',status:'',example:false,finalCat:null,finalPoints:100,categories:defaultCats()}))};
-  S={v:1,updatedAt:0,name:st.name.trim(),curSem:sm.id,semesters:[sm],scale:DEFAULT_SCALE.map(r=>({...r})),round:false,examples:false};
+  S={v:1,updatedAt:0,name:(ui.acct&&ui.acct.name)||st.name.trim(),curSem:sm.id,semesters:[sm],scale:DEFAULT_SCALE.map(r=>({...r})),round:false,examples:false};
   save(); ui.setup=null; afterLoad();
 }
 
@@ -512,14 +527,36 @@ function warningsFor(c){
   }
   return out;
 }
-function syncSeen(){
-  S.seen=S.seen||{}; let ch=false;
+function syncSeen(party){
+  S.seen=S.seen||{}; let ch=false; const ups=[];
   S.semesters.forEach(s=>s.classes.forEach(c=>{
     if(c.status) return; const g=classGrade(c,false); if(g==null) return;
     const L=letterFor(g), prev=S.seen[c.id], pl=prev&&S.scale.find(r=>r.l===prev);
+    if(pl&&L.gp>pl.gp&&!c.example) ups.push({c,L});
     if(!pl||L.gp>=pl.gp){ if(prev!==L.l){S.seen[c.id]=L.l; ch=true;} }
   }));
+  if(party&&ups.length) celebrate(ups);
   return ch;
+}
+function toast(t){ const el=document.createElement('div'); el.className='toast'; el.setAttribute('role','status'); el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),3300); }
+function celebrate(ups){
+  haptic(true);
+  toast(ups.length===1?`${ups[0].c.name} went up to ${ups[0].L.l}!`:`${ups.length} classes went up a letter grade!`);
+  if(reduced()) return;
+  const old=document.getElementById('confetti'); if(old) old.remove();
+  const W=innerWidth, H=innerHeight, dpr=Math.min(2,window.devicePixelRatio||1), cv=document.createElement('canvas');
+  cv.id='confetti'; cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px'; cv.setAttribute('aria-hidden','true');
+  document.body.appendChild(cv); const x=cv.getContext('2d'); x.scale(dpr,dpr);
+  const cols=Object.values(COLOR_HEX), N=Math.min(170,60+Math.round(W/4));
+  const ps=Array.from({length:N},(_,i)=>{const L=i%2===0; return {x:L?-10:W+10,y:H*(.62+Math.random()*.25),vx:(L?1:-1)*(4+Math.random()*8),vy:-(9+Math.random()*10),w:6+Math.random()*6,h:8+Math.random()*9,r:Math.random()*6.3,vr:(Math.random()-.5)*.4,t:Math.random()*6.3,c:cols[i%cols.length]};});
+  const t0=performance.now(), END=3200;
+  const step=now=>{
+    const t=now-t0; x.clearRect(0,0,W,H); let alive=0;
+    ps.forEach(p=>{ p.vy+=.32; p.vx*=.985; p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; p.t+=.12; if(p.y<H+20) alive++;
+      x.save(); x.translate(p.x,p.y); x.rotate(p.r); x.scale(1,Math.cos(p.t)); x.globalAlpha=Math.max(0,Math.min(1,(END-t)/600)); x.fillStyle=p.c; x.fillRect(-p.w/2,-p.h/2,p.w,p.h); x.restore(); });
+    if(alive&&t<END&&cv.isConnected) requestAnimationFrame(step); else cv.remove();
+  };
+  requestAnimationFrame(step);
 }
 
 /* ---------- views ---------- */
@@ -539,7 +576,7 @@ function homeView(){
     const right=c.status?`<span class="badge g-S">${c.status}</span>`:gr==null?`<span class="meta">No grades</span>`:`<span class="num meta">${f1(gr)}%</span>${letterBadge(c.id,L)}`;
     return `<button class="row tap" data-act="open" data-id="${c.id}"><span class="dot" style="background:var(--c-${c.color})"></span><span class="main"><div class="t">${esc(c.name)}</div><div class="s">${+c.credits} credit${+c.credits===1?'':'s'} · ${c.mode==='points'?'Total points':'Weighted'}${c.status?' · not in GPA':''}</div></span><span class="r">${right}<span class="chev">›</span></span></button>`;
   }).join('');
-  return `<header class="lt"><div class="lt-row"><div><div class="eyebrow">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div><h1>Hi ${esc(S.name||'there')}</h1></div>${wiSwitch()}</div><div class="chips">${chips}</div>
+  return `<header class="lt"><div class="lt-row"><div><div class="eyebrow">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div><h1>Grades</h1></div>${wiSwitch()}</div><div class="chips">${chips}</div>
    <label class="search" for="q">${ICON_Q}<input id="q" type="search" placeholder="Search assignments" value="${esc(ui.q||'')}" autocomplete="off" aria-label="Search assignments in every class and semester"></label></header>
   <div id="sr" style="display:contents">${searchResults(ui.q)}</div>
   <section class="glass sum"><div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--fill)" stroke-width="11"/><circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" ${ringAnim}/></svg><div class="v"><b class="num" ${g?`data-count="1" data-key="gpa" data-val="${g.gpa.toFixed(2)}" data-dec="2"`:''}>${g?g.gpa.toFixed(2):'–'}</b><span>GPA</span></div></div>
@@ -605,7 +642,7 @@ function authView(){
   const a=ui.auth, m=a.mode;
   return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Grade Book</div><h1>${m==='up'?'Create your account':m==='reset'?'Reset your password':m==='newpw'?'Choose a new password':'Sign in'}</h1></div>
    <p class="note" style="font-size:15px">${m==='reset'?"Enter your email and you'll get a link to reset your password.":m==='newpw'?'Type a new password for your account.':'Your grades save to your account, so they show up on your phone and your computer. Only you can see them.'}</p></header>
-  <form id="au-f" class="glass list" novalidate style="margin:0">${m==='newpw'?'':`<div class="fr"><label for="au-e">Email</label><input id="au-e" type="email" autocomplete="email" inputmode="email" value="${esc(a.email||'')}" placeholder="you@example.com"></div>`}${m==='reset'?'':`<div class="fr"><label for="au-p">${m==='newpw'?'New password':'Password'}</label><input id="au-p" type="password" autocomplete="${m==='up'||m==='newpw'?'new-password':'current-password'}" placeholder="${m==='up'||m==='newpw'?'At least 6 characters':'Password'}"></div>`}<button type="submit" hidden></button></form>
+  <form id="au-f" class="glass list" novalidate style="margin:0">${m==='up'?`<div class="fr"><label for="au-n">Name</label><input id="au-n" autocomplete="name" autocapitalize="words" value="${esc(a.name||'')}" placeholder="Your name"></div>`:''}${m==='newpw'?'':`<div class="fr"><label for="au-e">Email</label><input id="au-e" type="email" autocomplete="email" inputmode="email" value="${esc(a.email||'')}" placeholder="you@example.com"></div>`}${m==='reset'?'':`<div class="fr"><label for="au-p">${m==='newpw'?'New password':'Password'}</label><input id="au-p" type="password" autocomplete="${m==='up'||m==='newpw'?'new-password':'current-password'}" placeholder="${m==='up'||m==='newpw'?'At least 6 characters':'Password'}"></div>`}<button type="submit" hidden></button></form>
   <div id="au-msg" class="note" role="status" style="min-height:1.2em;margin-top:-10px;color:${a.ok?'var(--green)':'var(--red)'}">${esc(a.msg||'')}</div>
   <button class="btn block" data-act="auGo">${m==='up'?'Create account':m==='reset'?'Send reset link':m==='newpw'?'Save password':'Sign in'}</button>
   <div style="display:grid;gap:12px;justify-items:center;font-size:15px">
@@ -616,21 +653,20 @@ function setupView(){
   const st=ui.setup, ph=['Biology','English','Math','History','Spanish','Art'];
   return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Welcome to Grade Book</div><h1>Set up your classes</h1></div></header>
   ${ui.bootErr?`<p class="note">${esc(ui.bootErr)}</p>`:''}
-  <section class="glass list"><div class="fr"><label for="su-n">First name</label><input id="su-n" data-su="name" value="${esc(st.name)}" placeholder="Name" autocomplete="given-name"></div></section>
+  ${ui.acct&&ui.acct.name?'':`<section class="glass list"><div class="fr"><label for="su-n">Name</label><input id="su-n" data-su="name" value="${esc(st.name)}" placeholder="Your name" autocomplete="name"></div></section>`}
   <section><div class="sec-h"><span>Your classes</span></div><div class="glass list">${st.classes.map((n,i)=>`<div class="fr"><input data-su="c" data-i="${i}" value="${esc(n)}" placeholder="${ph[i%ph.length]}" aria-label="Class ${i+1} name" style="text-align:left"><button type="button" data-act="suRm" data-i="${i}" aria-label="Remove class ${i+1}" style="color:var(--red);font-size:20px;width:26px">⊖</button></div>`).join('')}<button class="row tap addrow" data-act="suAdd">+ Add another class</button></div></section>
   <p class="note" style="padding:0 16px;margin-top:-12px">Each class starts with Homework, Quizzes, Tests and Final exam categories. You can change them anytime with Edit on the class page.</p>
   <div id="su-msg" class="note" role="alert" style="color:var(--red)"></div>
   <button class="btn block" data-act="suDone">Start</button>
   <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button class="btn ghost" data-act="suEx">Try example classes</button><button class="btn ghost" data-act="suImp">Import a backup file</button><input type="file" id="imp" accept=".json,application/json" hidden></div>
-  ${ui.acct?`<p class="note" style="text-align:center">Signed in as ${esc(ui.acct.email||ui.acct.name)} · <button class="addrow" data-act="signOut">Sign out</button></p>`:''}`;
+  ${ui.acct?`<p class="note" style="text-align:center">Signed in as ${esc(ui.acct.name||ui.acct.email)} · <button class="addrow" data-act="signOut">Sign out</button></p>`:''}`;
 }
 
 function settingsView(){
   const rows=sortedScale().map(r=>`<div class="fr"><span class="l">${esc(r.l)}</span><span style="flex:1"></span><input class="num" inputmode="decimal" aria-label="${esc(r.l)} minimum percent" data-scale="${esc(r.l)}" data-f="min" value="${r.min}"><input class="num" inputmode="decimal" aria-label="${esc(r.l)} grade points" data-scale="${esc(r.l)}" data-f="gp" value="${r.gp.toFixed(1)}"></div>`).join('');
   const sync={account:'Your grades save to your account. Sign in on any device to see them.',device:'Saved in this browser only. Other devices and browsers will not see these grades.',error:'Could not reach your account. Changes are saved in this browser for now.'}[ui.sync];
   return `<header class="lt"><h1>Settings</h1></header>
-  <section class="glass list"><div class="fr"><label for="nm">Your name</label><input id="nm" data-name="1" value="${esc(S.name||'')}" placeholder="Name" autocomplete="given-name"></div></section>
-  <section><div class="sec-h"><span>Account</span></div><div class="glass list">${ui.acct?`<div class="row"><span class="main"><div class="t">${esc(ui.acct.email||ui.acct.name||'Signed in')}</div><div class="s">${sync}</div></span></div><div class="row"><button class="btn ghost" data-act="signOut">Sign out</button></div>`:`<div class="row"><span class="main"><div class="t">Not signed in</div><div class="s">${sync}</div></span></div>${CFG?`<div class="row"><button class="btn ghost" data-act="toAccount">Sign in to sync your grades</button></div>`:''}`}</div></section>
+  <section><div class="sec-h"><span>Account</span></div><div class="glass list">${ui.acct?`<div class="row"><span class="main"><div class="t">${esc(ui.acct.name||ui.acct.email||'Signed in')}</div>${ui.acct.name&&ui.acct.email?`<div class="s">${esc(ui.acct.email)}</div>`:''}<div class="s">${sync}</div></span></div>${ui.acct.name?'':`<div class="fr"><label for="acct-n">Name</label><input id="acct-n" value="${esc(S.name||'')}" placeholder="Add your name" autocomplete="name" autocapitalize="words" style="text-align:left"><button class="ack" data-act="saveName">Save</button></div><div id="acct-msg" class="note" role="status" style="padding:0 14px 10px"></div>`}<div class="row"><button class="btn ghost" data-act="signOut">Sign out</button></div>`:`<div class="row"><span class="main"><div class="t">Not signed in</div><div class="s">${sync}</div></span></div>${CFG?`<div class="row"><button class="btn ghost" data-act="toAccount">Sign in to sync your grades</button></div>`:''}`}</div></section>
   <section><div class="sec-h"><span>Grade scale</span></div><div class="glass list scale"><div class="fr hd"><span class="l">Grade</span><span style="flex:1"></span><span style="width:70px;text-align:right">Min %</span><span style="width:70px;text-align:right">Points</span></div>${rows}</div></section>
   <section class="glass list"><div class="fr"><label>Round to whole percent</label><span style="flex:1"></span><button class="sw ${S.round?'on':''}" data-act="round" aria-pressed="${S.round}" aria-label="Round to whole percent"></button></div></section>
   <p class="note" style="padding:0 16px;margin-top:-12px">Off: 93.6% is an A-. On: 93.6% rounds to 94% and is an A. Ask your teacher which one your school uses.</p>
@@ -765,7 +801,7 @@ function dashView(){
   const recent=items.filter(x=>x.i.date&&x.i.date<=T).sort((a,b)=>a.i.date<b.i.date?1:a.i.date>b.i.date?-1:0).slice(0,5).map(x=>{
     const w=classGrade(x.c,false,null,asOf(x.i.date)), wo=classGrade(x.c,false,null,i=>i!==x.i&&(!i.date||i.date<=x.i.date)), eff=w==null||wo==null?null:w-wo;
     return `<button class="row tap" data-act="open" data-id="${x.c.id}"><span class="main"><div class="t">${esc(x.i.name)}</div><div class="s num">${esc(x.c.name)} · ${shortDate(x.i.date)} · ${+x.i.score} / ${+x.i.max}</div></span><span class="chg num ${eff==null||Math.abs(eff)<.05?'':eff>0?'up':'down'}">${eff==null?'':(eff>=0?'+':'−')+Math.abs(eff).toFixed(1)+'%'}</span></button>`;}).join('');
-  return `<header class="lt"><div><div class="eyebrow">Dashboard · ${esc(s.name)}</div><h1>${dateTitle}</h1></div></header>
+  return `<header class="lt"><div><div class="eyebrow">${dateTitle} · ${esc(s.name)}</div><h1>Hi ${esc(firstName()||'there')}</h1></div></header>
   <section class="tiles"><div class="tile glass"><small>Semester GPA</small><b class="num" ${gNow!=null?`data-count="1" data-key="dgpa" data-val="${gNow.toFixed(2)}" data-dec="2"`:''}>${gNow!=null?gNow.toFixed(2):'–'}</b>${delta(gNow,gMo,2,'')}${gMo!=null&&gNow!=null?` since ${shortDate(mo)}</span>`:''}</div>
    <div class="tile glass"><small>Average</small><b class="num">${aNow!=null?`<span data-count="1" data-key="davg" data-val="${f1(aNow)}" data-dec="1">${f1(aNow)}</span>%`:'–'}</b>${delta(aNow,aWk,1,'')}${aWk!=null&&aNow!=null?` since ${shortDate(wk)}</span>`:''}</div>
    <div class="tile glass"><small>Graded</small><b class="num">${items.length}</b><span class="d">${recentN} since ${shortDate(wk)}</span></div></section>
@@ -889,18 +925,19 @@ document.addEventListener('click',e=>{
   switch(a){
     case 'scrim': if(e.target===t) closeSheet(); return;
     case 'close': closeSheet(); return;
-    case 'sheetSave':{const err=onSave&&onSave(); if(typeof err==='string'){showErr(err);return;} syncSeen(); save(); closeSheet(); render(); return;}
-    case 'sheetDel': if(sheetDel) sheetDel(); syncSeen(); save(); closeSheet(); render(); return;
+    case 'sheetSave':{const err=onSave&&onSave(); if(typeof err==='string'){showErr(err);return;} syncSeen(true); save(); closeSheet(); render(); return;}
+    case 'sheetDel': if(sheetDel) sheetDel(); syncSeen(true); save(); closeSheet(); render(); return;
     case 'ackDrop': {const c=findClass(t.dataset.id); const g=c&&classGrade(c,false); if(g!=null){S.seen=S.seen||{}; S.seen[c.id]=letterFor(g).l; save();} break;}
-    case 'auMode': ui.auth.email=val('au-e')||ui.auth.email; ui.auth.mode=t.dataset.v; ui.auth.msg=''; break;
+    case 'auMode': ui.auth.email=val('au-e')||ui.auth.email; ui.auth.name=val('au-n')||ui.auth.name; ui.auth.mode=t.dataset.v; ui.auth.msg=''; break;
     case 'auGo': authSubmit(); return;
     case 'auGuest': try{localStorage.setItem(KEY+'.mode','local');}catch(e){} ui.carry=null; useLocal(); return;
     case 'toAccount': ui.carry=S; try{localStorage.removeItem(KEY+'.mode');}catch(e){} S=null; ui.auth={mode:'up',msg:'',email:''}; ui.route={view:'auth'}; break;
     case 'signOut': signOutNow(); return;
+    case 'saveName': saveName(); return;
     case 'suAdd': {ui.setup.classes.push(''); render(); const ins=app.querySelectorAll('[data-su="c"]'); if(ins.length) ins[ins.length-1].focus(); return;}
     case 'suRm': ui.setup.classes.splice(+t.dataset.i,1); break;
     case 'suDone': setupDone(); return;
-    case 'suEx': {const nm=ui.setup?ui.setup.name.trim():''; S=fresh(); S.name=nm; save(); ui.setup=null; afterLoad(); return;}
+    case 'suEx': {const nm=(ui.acct&&ui.acct.name)||(ui.setup?ui.setup.name.trim():''); S=fresh(); S.name=nm; save(); ui.setup=null; afterLoad(); return;}
     case 'suImp': document.getElementById('imp').click(); return;
     case 'importItems': importSheet(findClass(t.dataset.id)); return;
     case 'dates': datesSheet(t.dataset.cls||null); return;
@@ -933,10 +970,10 @@ document.addEventListener('click',e=>{
     case 'editItem': {const c=findClass(ui.route.id); const k=c.categories.find(k=>k.id===t.dataset.cat); itemSheet(c,k.id,k.items.find(i=>i.id===t.dataset.id)); return;}
     case 'pickFinal': {const c=findClass(t.dataset.cls); c.finalCat=t.dataset.id; save(); break;}
     case 'clearEx': S.semesters.forEach(s=>s.classes=s.classes.filter(c=>!c.example)); S.examples=false; save(); break;
-    case 'round': S.round=!S.round; save(); break;
+    case 'round': S.round=!S.round; syncSeen(); save(); break;
     case 'export': exportData(); return;
     case 'import': document.getElementById('imp').click(); return;
-    case 'resetScale': S.scale=DEFAULT_SCALE.map(r=>({...r})); save(); break;
+    case 'resetScale': S.scale=DEFAULT_SCALE.map(r=>({...r})); syncSeen(); save(); break;
     case 'wipe': {const x={id:uid(),name:sem().name,classes:[]}; S.semesters=[x]; S.curSem=x.id; S.examples=false; save(); break;}
     default: return;
   }
@@ -947,8 +984,7 @@ document.addEventListener('input',e=>{if(e.target.dataset.su&&ui.setup){if(e.tar
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='i-c'&&rangeApi){rangeApi(true);return;}
-  if(t.dataset.name){S.name=t.value.trim(); save(); return;}
-  if(t.dataset.scale){const r=S.scale.find(r=>r.l===t.dataset.scale); if(r&&isNum(t.value)){r[t.dataset.f]=+t.value; save();} render(); return;}
+  if(t.dataset.scale){const r=S.scale.find(r=>r.l===t.dataset.scale); if(r&&isNum(t.value)){r[t.dataset.f]=+t.value; syncSeen(); save();} render(); return;}
   if(t.dataset.fp){const c=findClass(t.dataset.fp); if(c&&isNum(t.value)){c.finalPoints=+t.value; save(); render();}}
 });
 async function exportData(){

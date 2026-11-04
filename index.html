@@ -228,10 +228,6 @@ svg.chart{width:100%;height:auto;display:block;overflow:visible}
 .drow input[type=date]{border:0;background:var(--fill);border-radius:8px;padding:6px 8px;font-size:15px;min-width:138px;outline:none}
 .drow.missing input[type=date]{box-shadow:inset 0 0 0 1.5px var(--orange)}
 .same{font-size:12px;font-weight:600;color:var(--accent);padding:6px 8px;border-radius:8px;background:var(--fill);white-space:nowrap}
-.gc{display:grid;gap:10px;padding:12px 14px}
-.gc+.gc{border-top:1px solid var(--sep)}
-.gc .t{font-weight:600}
-.gc select{border:0;background:var(--fill);border-radius:8px;padding:8px;font-size:15px;width:100%;outline:none}
 .dates-cta{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .chg{font-size:13px;font-weight:650;min-width:52px;text-align:right}
 /* Search */
@@ -253,14 +249,6 @@ mark{background:rgba(255,204,0,.38);color:inherit;border-radius:3px;padding:0 1p
 .rc-ic svg{width:17px;height:17px}
 .rc-prev{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--sep);box-shadow:var(--shadow);background:#fff}
 .rc-acts{display:flex;gap:10px;flex-wrap:wrap}
-/* Use on iPhone */
-.qrc{display:flex;gap:18px;align-items:center;padding:16px;flex-wrap:wrap}
-.qr{width:150px;height:150px;flex:none;background:#fff;border-radius:16px;padding:8px;border:1px solid var(--sep);display:grid;place-items:center}
-.qr svg{width:100%;height:100%;display:block}
-.qrc .main{flex:1 1 200px;min-width:0;display:grid;gap:8px}
-.qrc ol{margin:0;padding-left:20px;font-size:14px;color:var(--fg2);line-height:1.5}
-.qrc b{color:var(--fg)}
-.applink{font-size:13px;color:var(--fg2);overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}
 @media (max-width:420px){.tile b{font-size:22px}.tile{padding:12px}.spark{width:60px}}
 @keyframes up{from{transform:translateY(100%)}}
 @keyframes fade{from{opacity:0}}
@@ -643,18 +631,10 @@ function settingsView(){
   return `<header class="lt"><h1>Settings</h1></header>
   <section class="glass list"><div class="fr"><label for="nm">Your name</label><input id="nm" data-name="1" value="${esc(S.name||'')}" placeholder="Name" autocomplete="given-name"></div></section>
   <section><div class="sec-h"><span>Account</span></div><div class="glass list">${ui.acct?`<div class="row"><span class="main"><div class="t">${esc(ui.acct.email||ui.acct.name||'Signed in')}</div><div class="s">${sync}</div></span></div><div class="row"><button class="btn ghost" data-act="signOut">Sign out</button></div>`:`<div class="row"><span class="main"><div class="t">Not signed in</div><div class="s">${sync}</div></span></div>${CFG?`<div class="row"><button class="btn ghost" data-act="toAccount">Sign in to sync your grades</button></div>`:''}`}</div></section>
-  <section><div class="sec-h"><span>Use on iPhone</span></div><div class="glass list"><div class="qrc">
-   <div class="qr" id="qr" role="img" aria-label="QR code that opens Grade Book"><span class="spin"></span></div>
-   <div class="main"><ol><li>Point your iPhone camera at this code and tap the link.</li><li>Sign in with the same account.</li><li>In Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>.</li></ol>
-    <div class="applink" id="applink">${APP_URL}</div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn ghost" data-act="copyLink">Copy link</button><span class="meta" id="copymsg" role="status"></span></div></div>
-  </div></div></section>
   <section><div class="sec-h"><span>Grade scale</span></div><div class="glass list scale"><div class="fr hd"><span class="l">Grade</span><span style="flex:1"></span><span style="width:70px;text-align:right">Min %</span><span style="width:70px;text-align:right">Points</span></div>${rows}</div></section>
   <section class="glass list"><div class="fr"><label>Round to whole percent</label><span style="flex:1"></span><button class="sw ${S.round?'on':''}" data-act="round" aria-pressed="${S.round}" aria-label="Round to whole percent"></button></div></section>
   <p class="note" style="padding:0 16px;margin-top:-12px">Off: 93.6% is an A-. On: 93.6% rounds to 94% and is an A. Ask your teacher which one your school uses.</p>
   <section><div class="sec-h"><span>Not counted in GPA</span></div><div class="glass list">${Object.entries(STATUSES).filter(([k])=>k).map(([k,v])=>`<div class="row"><span class="badge g-S">${k}</span><span class="main">${esc(v.split('· ')[1])}</span></div>`).join('')}</div></section>
-  <section><div class="sec-h"><span>Google Classroom</span></div><div class="glass list"><div class="row"><span class="main"><div class="s">Ran the Classroom export script in a Google Sheet? Copy the whole sheet and paste it here. Grade Book matches each Classroom class to one of yours.</div></span></div>
-   <div class="row"><button class="btn ghost" data-act="classroom">Paste from Classroom sheet</button></div></div></section>
   <section><div class="sec-h"><span>Backup</span></div><div class="glass list"><div class="row"><span class="main"><div class="s">Export saves all your grades to a file. Import loads that file on another device. You can add it to the grades here or replace them.</div>${ui.msg?`<div class="s" role="status" style="color:var(--accent);margin-top:6px">${esc(ui.msg)}</div>`:''}</span></div>
    <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn ghost" data-act="export">Export grades</button><button class="btn ghost" data-act="import">Import grades</button><input type="file" id="imp" accept=".json,application/json" hidden></div></div></section>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn ghost" data-act="resetScale">Reset grade scale</button><button class="btn danger" data-act="wipe" data-confirm>Delete all grades</button></div>`;
@@ -676,7 +656,7 @@ function render(){
   app.innerHTML=ui.route.view==='settings'?settingsView():ui.route.view==='class'?classView(c):ui.route.view==='dash'?dashView():homeView();
   const rk=ui.route.view+(ui.route.id||'');
   if(rk!==ui.lastRoute&&!reduced()){app.classList.remove('enter');void app.offsetWidth;app.classList.add('enter');} else if(rk===ui.lastRoute) app.classList.remove('enter');
-  ui.lastRoute=rk; countUp(); if(ui.route.view==='dash') wireChart(); if(ui.route.view==='settings') drawQR();
+  ui.lastRoute=rk; countUp(); if(ui.route.view==='dash') wireChart();
   const tv=ui.route.view==='class'?ui.from:ui.route.view;
   document.getElementById('tabs').innerHTML=`<button class="tab ${tv==='dash'?'on':''}" data-act="dash">${ICON_D}Dashboard</button><button class="tab ${tv==='home'?'on':''}" data-act="home">${ICON_G}Grades</button><button class="tab ${tv==='settings'?'on':''}" data-act="settings">${ICON_S}Settings</button>`;
 }
@@ -809,7 +789,7 @@ function openSheet(title,html,save,saveLabel='Save'){
   root.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="grab"></div><div class="sh-h"><button data-act="close">Cancel</button><h3>${esc(title)}</h3><button class="save" data-act="sheetSave">${saveLabel}</button></div><div class="form" id="sf">${html}</div></div></div>`;
   const first=root.querySelector('input'); if(first&&!first.value) setTimeout(()=>first.focus(),250);
 }
-function closeSheet(){root.innerHTML='';onSave=null;rangeApi=null;importApi=null;pendingImport=null;datesApi=null;gcApi=null;rcApi=null;}
+function closeSheet(){root.innerHTML='';onSave=null;rangeApi=null;importApi=null;pendingImport=null;datesApi=null;rcApi=null;}
 const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
 const segHtml=(name,opts,cur)=>`<div class="seg" data-seg="${name}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" class="${v===cur?'on':''}">${l}</button>`).join('')}</div>`;
 const segVal=name=>{const b=root.querySelector(`[data-seg="${name}"] .on`);return b?b.dataset.v:'';};
@@ -924,14 +904,11 @@ document.addEventListener('click',e=>{
     case 'suImp': document.getElementById('imp').click(); return;
     case 'importItems': importSheet(findClass(t.dataset.id)); return;
     case 'dates': datesSheet(t.dataset.cls||null); return;
-    case 'classroom': classroomSheet(); return;
     case 'report': reportSheet(); return;
-    case 'copyLink': copyLink(); return;
     case 'rcSem': rcApi&&rcApi.setSem(t.dataset.id); return;
     case 'rcSave': rcApi&&rcApi.save(t.dataset.kind); return;
     case 'openHit': {S.curSem=t.dataset.sem; ui.from='home'; ui.route={view:'class',id:t.dataset.cls}; render(); window.scrollTo(0,0);
       const c=findClass(t.dataset.cls), k=c&&c.categories.find(k=>k.id===t.dataset.cat), it=k&&k.items.find(i=>i.id===t.dataset.id); if(it) itemSheet(c,k.id,it); return;}
-    case 'gcRead': gcApi&&gcApi.read(); return;
     case 'sameAbove': datesApi&&datesApi.same(t); return;
     case 'impRead': importApi&&importApi.read(); return;
     case 'impCk': {t.classList.toggle('on'); t.closest('.irow').classList.toggle('off',!t.classList.contains('on')); t.setAttribute('aria-pressed',t.classList.contains('on')); return;}
@@ -1090,29 +1067,8 @@ function progressCard(s){
    <p class="note">“Decided” estimates how much of each final grade comes from work that's already graded. It assumes regular work is spread evenly over the semester, and counts finals as undecided until they're graded. The range assumes everything left scores between 0% and 100%.</p></section>`;
 }
 
-/* ---------- use on iPhone ---------- */
+/* ---------- app address (used in sign-in emails) ---------- */
 const APP_URL='https://gradebook.fun/';
-let qrSvg=null;
-function loadQR(){
-  if(window.qrcode) return Promise.resolve(window.qrcode);
-  return new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';sc.onload=()=>window.qrcode?res(window.qrcode):rej(new Error('missing'));sc.onerror=rej;document.head.appendChild(sc);});
-}
-async function drawQR(){
-  const el=document.getElementById('qr'); if(!el) return;
-  if(qrSvg){el.innerHTML=qrSvg;return;}
-  try{
-    const make=await loadQR(), q=make(0,'M'); q.addData(APP_URL); q.make();
-    const n=q.getModuleCount(); let d='';
-    for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(q.isDark(r,c)) d+=`M${c} ${r}h1v1h-1z`;
-    qrSvg=`<svg viewBox="-2 -2 ${n+4} ${n+4}" shape-rendering="crispEdges" aria-hidden="true"><rect x="-2" y="-2" width="${n+4}" height="${n+4}" fill="#fff"/><path d="${d}" fill="#101217"/></svg>`;
-    const now=document.getElementById('qr'); if(now) now.innerHTML=qrSvg;
-  }catch(e){ const now=document.getElementById('qr'); if(now) now.innerHTML='<span class="note" style="text-align:center">QR code didn\'t load. Use Copy link.</span>'; }
-}
-function copyLink(){
-  const msg=t=>{const el=document.getElementById('copymsg'); if(el) el.textContent=t;};
-  const fallback=()=>{const el=document.getElementById('applink'); if(!el) return; const r=document.createRange(); r.selectNodeContents(el); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); msg('Link selected. Press ⌘C to copy.');};
-  try{ navigator.clipboard.writeText(APP_URL).then(()=>msg('Copied'),fallback); }catch(e){ fallback(); }
-}
 
 /* ---------- report card ---------- */
 let rcApi=null;
@@ -1208,71 +1164,6 @@ function reportSheet(){
   };
 }
 
-/* ---------- Classroom sheet import ---------- */
-let gcApi=null;
-function parseClassroomSheet(txt){
-  const lines=String(txt).split(/\r?\n/).filter(l=>l.trim());
-  if(!lines.length) return [];
-  const cells=l=>l.split('\t').map(x=>x.trim());
-  let head=cells(lines[0]).map(h=>h.toLowerCase()), start=1;
-  const idx=n=>head.findIndex(h=>h===n);
-  if(idx('class')<0||idx('assignment')<0){head=['class','assignment','category','score','out of','date'];start=0;}
-  const col={c:idx('class'),a:idx('assignment'),k:idx('category'),s:idx('score'),m:idx('out of'),d:idx('date')};
-  const out=[];
-  lines.slice(start).forEach(l=>{const r=cells(l); const cls=r[col.c], name=r[col.a]; if(!cls||!name) return;
-    out.push({cls,name,cat:col.k>=0?r[col.k]||'':'',score:col.s>=0&&isNum(r[col.s])?+r[col.s]:'',max:col.m>=0&&isNum(r[col.m])?+r[col.m]:'',date:col.d>=0&&isDate(r[col.d])?r[col.d]:''});});
-  return out;
-}
-function matchClass(name){
-  const n=name.toLowerCase(), cs=sem().classes;
-  return cs.find(c=>same(c.name,name))||cs.find(c=>{const m=c.name.toLowerCase();return m.length>=4&&(n.includes(m)||m.includes(n));})||null;
-}
-function classroomSheet(){
-  let groups=[];
-  openSheet('Classroom import',`
-    <p class="hint" style="margin:0">In your Classroom export sheet, press ⌘A then ⌘C (Ctrl+A, Ctrl+C on Windows) to copy everything. Paste it below.</p>
-    <div class="fl"><textarea id="gc-txt" placeholder="Class&#9;Assignment&#9;Category&#9;Score&#9;Out of&#9;Date"></textarea></div>
-    <div class="fr" style="padding:0 4px;min-height:0"><span class="meta" style="flex:1">Include assignments that aren't graded yet</span><button type="button" class="sw" id="gc-ung" data-act="toggleSw" aria-pressed="false" aria-label="Include assignments that aren't graded yet"></button></div>
-    <button class="btn block" data-act="gcRead">Read sheet</button>
-    <div id="gc-msg" role="status" class="note"></div>
-    <div id="gc-res"></div>`,()=>{
-      if(!groups.length) return 'Paste your sheet and tap Read sheet first.';
-      const ung=document.getElementById('gc-ung').classList.contains('on');
-      let addI=0,upd=0,newC=0;
-      groups.forEach((g,gi)=>{
-        const pick=root.querySelector(`[data-gc="${gi}"]`).value; if(pick==='skip') return;
-        let c=pick==='new'?null:findClass(pick);
-        if(!c){c={id:uid(),name:g.name,credits:1,color:COLORS[sem().classes.length%COLORS.length],mode:'points',status:'',example:false,finalCat:null,finalPoints:100,categories:[]}; sem().classes.push(c); newC++;}
-        g.rows.forEach(r=>{
-          if(!ung&&r.score==='') return;
-          const ex=c.categories.flatMap(k=>k.items).find(i=>same(i.name,r.name));
-          if(ex){ if(r.score!==''&&(+ex.score!==r.score||+ex.max!==r.max)){ex.score=r.score; if(r.max) ex.max=r.max; upd++;} if(r.date&&!ex.date) ex.date=r.date; return; }
-          let k=r.cat?c.categories.find(x=>same(x.name,r.cat)):null;
-          if(!k&&(pick==='new'||!c.categories.length)){k={id:uid(),name:r.cat||'Assignments',weight:0,items:[]}; c.categories.push(k);}
-          if(!k) k=guessCat(r.name,c);
-          k.items.push({id:uid(),name:r.name,score:r.score,max:r.max||100,whatIf:false,date:r.date}); addI++;
-        });
-      });
-      ui.msg=`Classroom import: added ${addI} assignment${addI===1?'':'s'}${newC?` and ${newC} new class${newC===1?'':'es'}`:''}. Updated ${upd} score${upd===1?'':'s'}.`;
-      ui.route={view:'settings'};
-    },'Add');
-  const msg=t=>{document.getElementById('gc-msg').textContent=t;};
-  gcApi={read(){
-    const rows=parseClassroomSheet(val('gc-txt'));
-    if(!rows.length){msg('Nothing to read. Paste the whole sheet, including the header row.'); document.getElementById('gc-res').innerHTML=''; groups=[]; return;}
-    const by={}; rows.forEach(r=>{(by[r.cls]=by[r.cls]||[]).push(r);});
-    groups=Object.keys(by).map(name=>({name,rows:by[name]}));
-    const opts=sem().classes.map(c=>({id:c.id,name:c.name}));
-    document.getElementById('gc-res').innerHTML=`<div class="sec-h" style="padding-top:4px"><span>Match your classes</span><span>${groups.length}</span></div><div class="fl">${groups.map((g,gi)=>{
-      const m=matchClass(g.name), graded=g.rows.filter(r=>r.score!=='').length;
-      return `<div class="gc"><div><div class="t">${esc(g.name)}</div><div class="s meta">${graded} graded · ${g.rows.length-graded} not graded yet</div></div>
-        <select data-gc="${gi}" aria-label="Add ${esc(g.name)} to">${opts.map(o=>`<option value="${o.id}" ${m&&m.id===o.id?'selected':''}>Add to ${esc(o.name)}</option>`).join('')}<option value="new" ${m?'':'selected'}>Make a new class</option><option value="skip">Skip this class</option></select></div>`;}).join('')}</div>
-      <p class="hint" style="margin-top:8px">Assignments you already have are matched by name and get their scores and dates updated. New ones go into the category with the same name, or the closest match.</p>`;
-    msg(`Found ${rows.length} assignment${rows.length===1?'':'s'} in ${groups.length} class${groups.length===1?'':'es'}.`);
-    haptic(true);
-  }};
-}
-
 /* ---------- assignment dates ---------- */
 let datesApi=null;
 function datesSheet(onlyClass){
@@ -1315,7 +1206,7 @@ function datesSheet(onlyClass){
   };
 }
 
-/* ---------- import from Classroom: screenshot or pasted list ---------- */
+/* ---------- import: pasted list ---------- */
 let importApi=null;
 function guessCat(name,c){
   const n=String(name).toLowerCase();

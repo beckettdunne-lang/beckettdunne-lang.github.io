@@ -148,3 +148,8 @@ create policy "Update own grades" on public.gradebooks
                   and (a.free_forever or a.paid_at is not null or a.sub_status = 'active'
                        or (a.sub_status = 'on_trial' and a.trial_ends_at + interval '12 hours' > now())
                        or (a.sub_status = 'cancelled' and a.trial_ends_at > now()))));
+
+-- ---------- Lock down Supabase's rls_auto_enable ----------
+-- This event-trigger function turns on row-level security for every new table in public.
+-- It only runs from the ensure_rls event trigger, so nobody needs to call it directly.
+revoke execute on function public.rls_auto_enable() from public, anon, authenticated;

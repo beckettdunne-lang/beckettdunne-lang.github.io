@@ -1,4 +1,20 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Grade Book</title><meta name="theme-color" content="#ffffff"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Grade Book</title>
+<meta name="description" content="Track your class grades, see your GPA, and know what you need on the final. Free for 3 days, then $5 once.">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Grade Book">
+<meta property="og:url" content="https://gradebook.fun/">
+<meta property="og:title" content="Grade Book">
+<meta property="og:description" content="Track your class grades, see your GPA, and know what you need on the final.">
+<meta property="og:image" content="https://gradebook.fun/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Grade Book: a semester GPA of 3.75 with four class grades">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffffff"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <style>
 /* Layout: one-column iOS app, large title, light grouped cards on a plain white page, floating tab bar. Single light theme by choice. */
 :root{
@@ -785,6 +801,7 @@ function settingsView(){
   <section><div class="sec-h"><span>Backup</span></div><div class="glass list"><div class="row"><span class="main"><div class="s">Export saves all your grades to a file. Import loads that file on another device. You can add it to the grades here or replace them.</div>${ui.msg?`<div class="s" role="status" style="color:var(--accent);margin-top:6px">${esc(ui.msg)}</div>`:''}</span></div>
    <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn ghost" data-act="export">Export grades</button><button class="btn ghost" data-act="import">Import grades</button><input type="file" id="imp" accept=".json,application/json" hidden></div></div></section>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn ghost" data-act="resetScale">Reset grade scale</button><button class="btn danger" data-act="wipe" data-confirm>Delete all grades</button></div>
+  ${ui.acct?`<section><div class="sec-h"><span>Delete account</span></div><div class="glass list"><div class="row"><span class="main"><div class="s">Permanently delete your account and all your grades.</div></span><button class="ack" data-act="delAcct" style="color:var(--red)">Delete account</button></div></div></section>`:''}
   ${legalLinks()}`;
 }
 
@@ -938,6 +955,35 @@ function openSheet(title,html,save,saveLabel='Save'){
   root.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="grab"></div><div class="sh-h"><button data-act="close">Cancel</button><h3>${esc(title)}</h3><button class="save" data-act="sheetSave">${saveLabel}</button></div><div class="form" id="sf">${html}</div></div></div>`;
   const first=root.querySelector('input'); if(first&&!first.value) setTimeout(()=>first.focus(),250);
 }
+function deleteAccountSheet(){
+  const p=ui.pay||{}, trial=p.state==='trial'||p.state==='payfail', paid=p.state==='paid';
+  root.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Delete account"><div class="grab"></div><div class="sh-h"><button data-act="close">Cancel</button><h3>Delete account</h3><span style="width:60px"></span></div><div class="form" id="sf">
+   <p class="note" style="font-size:15px;color:var(--fg)">This permanently deletes your account${ui.acct&&ui.acct.email?` (${esc(ui.acct.email)})`:''} and all your grades. You can't undo it.</p>
+   ${trial?`<p class="note" style="font-size:15px">Your free trial will be cancelled, so your card won't be charged.</p>`:''}
+   ${paid?`<p class="note" style="font-size:15px">Deleting your account doesn't refund your ${PRICE}. If you want a refund, email beckettdunne@gmail.com before you delete it.</p>`:''}
+   <button class="btn ghost block" data-act="export">Download my grades first</button>
+   <p id="del-msg" class="note" role="alert" style="color:var(--red);min-height:1.2em;margin:0"></p>
+   <button class="btn danger block" data-act="delAcctGo" data-confirm>Delete my account</button>
+  </div></div></div>`;
+}
+async function deleteAccount(){
+  const btn=document.querySelector('[data-act="delAcctGo"]'), msg=t=>{const el=document.getElementById('del-msg'); if(el) el.textContent=t;};
+  if(!sb||!curUid) return;
+  if(btn){ btn.disabled=true; btn.textContent='Deleting…'; }
+  let err='';
+  try{
+    const {data,error}=await sb.functions.invoke('delete-account',{method:'POST'});
+    if(error){ let b=null; try{b=await error.context.json();}catch(e){} err=(b&&b.error)||'Could not delete your account. Check your connection and try again.'; }
+    else if(!data||!data.ok) err=(data&&data.error)||'Could not delete your account. Try again.';
+  }catch(e){ err='Could not delete your account. Check your connection and try again.'; }
+  if(err){ msg(err); if(btn){ btn.disabled=false; btn.classList.remove('armed'); btn.textContent='Delete my account'; } return; }
+  clearTimeout(writeTimer); ref=null;
+  try{ localStorage.removeItem(lkey); }catch(e){}
+  closeSheet();
+  try{ await sb.auth.signOut({scope:'local'}); }catch(e){}
+  if(curUid){ onUser(null); }
+  toast('Your account was deleted.');
+}
 function closeSheet(){root.innerHTML='';onSave=null;rangeApi=null;importApi=null;pendingImport=null;datesApi=null;rcApi=null;}
 const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
 const segHtml=(name,opts,cur)=>`<div class="seg" data-seg="${name}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" class="${v===cur?'on':''}">${l}</button>`).join('')}</div>`;
@@ -1049,6 +1095,8 @@ document.addEventListener('click',e=>{
     case 'buy': buyNow(); return;
     case 'payCheck': payCheck(true); return;
     case 'cancelTrial': cancelTrial(); return;
+    case 'delAcct': deleteAccountSheet(); return;
+    case 'delAcctGo': deleteAccount(); return;
     case 'saveName': saveName(); return;
     case 'suAdd': {ui.setup.classes.push(''); render(); const ins=app.querySelectorAll('[data-su="c"]'); if(ins.length) ins[ins.length-1].focus(); return;}
     case 'suRm': ui.setup.classes.splice(+t.dataset.i,1); break;

@@ -25,11 +25,11 @@ const reply = (status: number, text: string) => new Response(text, { status, hea
 Deno.serve(async (req) => {
   if (req.method !== "POST") return reply(405, "Use POST");
   const secret = Deno.env.get("LEMONSQUEEZY_WEBHOOK_SECRET");
-  if (!secret) return reply(500, "LEMONSQUEEZY_WEBHOOK_SECRET is not set");
+  if (!secret) { console.error("LEMONSQUEEZY_WEBHOOK_SECRET is not set"); return reply(500, "LEMONSQUEEZY_WEBHOOK_SECRET is not set"); }
 
   const raw = await req.text();
   const sig = (req.headers.get("X-Signature") ?? "").toLowerCase();
-  if (!sig || !sameText(await hmacHex(secret, raw), sig)) return reply(401, "Bad signature");
+  if (!sig || !sameText(await hmacHex(secret, raw), sig)) { console.error("Signature did not match. Check that the signing secret is the same in Lemon Squeezy and Supabase."); return reply(401, "Bad signature"); }
 
   let body: any;
   try { body = JSON.parse(raw); } catch { return reply(400, "Bad JSON"); }
@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
   const userId = body?.meta?.custom_data?.user_id;
   const orderId = String(body?.data?.id ?? "");
   const attrs = body?.data?.attributes ?? {};
+  console.log("event", event, "order", orderId, "has account", typeof userId === "string" && UUID.test(userId));
   if (typeof userId !== "string" || !UUID.test(userId)) return reply(200, "No Grade Book account on this order");
 
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {

@@ -63,3 +63,11 @@ In the old Grade Book, go to Settings > Export grades. In this one, sign in, the
 ## Domain
 
 `gradebook.fun` is registered with Hostinger. Its DNS has four A records for `@` (185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153) and a CNAME for `www` pointing to `beckettdunne-lang.github.io`.
+
+## Keeping Supabase awake
+
+The free Supabase plan pauses a project after about a week with no activity. `.github/workflows/keep-supabase-awake.yml` runs a small database query every day at 15:37 UTC so that doesn't happen. It reads the URL and key from `supabase-config.js`, so it needs no secrets. To run it by hand, open the Actions tab, choose "Keep Supabase awake", then "Run workflow".
+
+If a run fails, GitHub emails the repo owner. A failure usually means the project is already paused. Restore it in the Supabase dashboard.
+
+GitHub turns off scheduled workflows in a repo with no commits for 60 days. If that happens, the Actions tab shows a button to turn it back on.

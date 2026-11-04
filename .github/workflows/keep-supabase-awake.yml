@@ -1,0 +1,44 @@
+# Free Supabase projects pause after about a week with no activity.
+# This runs a tiny database query once a day so the project stays awake.
+# It reads the URL and publishable key from supabase-config.js, so there is nothing to set up.
+# The query asks for one row of `access`. Row-level security means it gets back [], which is fine:
+# the query still reaches the database.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "37 15 * * *" # every day at 15:37 UTC
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: supabase-config.js
+          sparse-checkout-cone-mode: false
+
+      - name: Query the database
+        run: |
+          url=$(grep -oE 'url: *"[^"]+"' supabase-config.js | cut -d'"' -f2)
+          key=$(grep -oE 'key: *"[^"]+"' supabase-config.js | cut -d'"' -f2)
+          if [ -z "$url" ] || [ -z "$key" ]; then
+            echo "Could not read the Supabase URL or key from supabase-config.js"
+            exit 1
+          fi
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o body.txt -w '%{http_code}' --max-time 30 \
+              -H "apikey: $key" -H "Authorization: Bearer $key" \
+              "$url/rest/v1/access?select=user_id&limit=1") || code=000
+            echo "Attempt $attempt: HTTP $code"
+            cat body.txt 2>/dev/null; echo
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "Supabase did not answer. If the project is paused, restore it in the Supabase dashboard."
+          exit 1

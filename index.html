@@ -197,7 +197,12 @@ h1{font-family:var(--font-d);font-size:34px;line-height:1.1;font-weight:700;lett
 .warn .row{align-items:flex-start}
 .warn .ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff;margin-top:1px}
 .warn .ic svg{width:16px;height:16px}
-.ic.orange{background:var(--orange)} .ic.red{background:var(--red)}
+.ic.orange{background:var(--orange)} .ic.red{background:var(--red)} .ic.blue{background:var(--accent)} .ic svg{width:18px;height:18px}
+/* What-if glow around the screen edges */
+#wiGlow{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:0;transition:opacity .35s;
+  box-shadow:inset 0 0 0 3px rgba(88,86,214,.55),inset 0 0 28px 6px rgba(0,122,255,.28),inset 0 0 70px 10px rgba(175,82,222,.16)}
+body.wi-on #wiGlow{opacity:1}
+@media (prefers-reduced-motion:reduce){#wiGlow{transition:none}}
 .warn .main{text-align:left}
 .ack{font-size:13px;font-weight:600;color:var(--accent);padding:6px 10px;border-radius:999px;background:var(--fill);flex:none}
 .hero-warn{font-size:14px;font-weight:600;display:flex;gap:6px;align-items:flex-start}
@@ -695,7 +700,7 @@ async function loadFriends(){
     if(!a.error) ui.fr.list=a.data||[];
     if(!b.error) ui.fr.feed=b.data||{events:[],high_fives:[]};
   }catch(e){}
-  if(ui.route.view==='friends'&&!document.querySelector('.scrim')) render(); else renderTabs();
+  if((ui.route.view==='friends'||ui.route.view==='dash')&&!document.querySelector('.scrim')&&!document.getElementById('tour')) render(); else renderTabs();
 }
 let pubTimer=null, pubKey='';
 function sharePayload(){
@@ -777,6 +782,18 @@ function friendCard(f){
    ${cls.length?`<div class="fgrid">${cls.map(c=>`<div class="fchip"><span class="nm">${esc(c.name)}</span><span class="badge ${gcls(c.letter)}">${esc(c.letter)}</span></div>`).join('')}</div>`:''}
    <div class="ffoot"><span class="s">${note}</span><button class="frm" data-act="frRemove" data-id="${f.id}" data-confirm>Remove friend</button></div></div>`;
 }
+function friendReqWarns(){
+  return ((ui.fr&&ui.fr.list)||[]).filter(f=>f.status==='pending'&&f.incoming)
+    .map(f=>({kind:'friend',sev:'blue',icon:ICON_F,id:f.id,text:`${f.name||'@'+f.username} (@${f.username}) sent you a friend request.`}));
+}
+function headsUp(warns){
+  if(!warns.length) return '';
+  return `<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>w.kind==='friend'
+    ?`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="friends" style="text-align:left"><div class="t">${esc(w.text)}</div></button><button class="ack" data-act="frAccept" data-id="${w.id}">Accept</button></div>`
+    :`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:w.kind==='setup'||w.kind==='weights'?`<button class="ack" data-act="editClass" data-id="${w.c.id}">Check</button>`:''}</div>`).join('')}</div></section>`;
+}
+// While What-if is on, the Grades tab and class pages show what-if grades, so warnings about the real grade are hidden there.
+const wiFilter=ws=>ui.wi?ws.filter(w=>w.kind==='setup'||w.kind==='weights'):ws;
 function renderTabs(){
   const el=document.getElementById('tabs'); if(!el||el.hidden) return;
   const tv=ui.route.view==='class'?ui.from:ui.route.view, n=incomingCount();
@@ -863,7 +880,7 @@ function homeView(){
   const all=S.semesters.flatMap(x=>x.classes); const cum=gpaOf(all,ui.wi);
   const C=2*Math.PI*52, frac=g?Math.min(1,g.gpa/4):0, pf=ui.prev.ring; ui.prev.ring=frac;
   const ringAnim=!reduced()&&pf!==frac?`class="arc anim" style="--from:${C*(1-(pf??0))}"`:'class="arc"';
-  const warns=s.classes.flatMap(warningsFor);
+  const warns=wiFilter(s.classes.flatMap(warningsFor));
   const chips=S.semesters.map(x=>`<button class="chip ${x.id===s.id?'on':''}" data-act="sem" data-id="${x.id}">${esc(x.name)}</button>`).join('')+
     `<button class="chip" data-act="editSem">Rename</button><button class="chip add" data-act="addSem">+ Semester</button>`;
   const rows=s.classes.map(c=>{
@@ -877,7 +894,7 @@ function homeView(){
   <section class="glass sum"><div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--fill)" stroke-width="11"/><circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" ${ringAnim}/></svg><div class="v"><b class="num" ${g?`data-count="1" data-key="gpa" data-val="${g.gpa.toFixed(2)}" data-dec="2"`:''}>${g?g.gpa.toFixed(2):'–'}</b><span>GPA</span></div></div>
    <div class="stats"><div class="stat"><small>${esc(s.name)}</small><b class="num">${g?g.gpa.toFixed(2)+' GPA':'No graded classes'}</b></div><div class="stat"><small>Cumulative</small><b class="num">${cum?cum.gpa.toFixed(2):'–'}</b></div><div class="stat"><small>Credits in GPA</small><b class="num">${g?g.cr:0}</b></div></div></section>
   <section class="glass list"><button class="row tap" data-act="report"><span class="rc-ic">${ICON_DOC}</span><span class="main"><div class="t">Report card</div><div class="s">Save a one-page summary for parents or a counselor</div></span><span class="chev">›</span></button></section>
-  ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:w.kind==='setup'||w.kind==='weights'?`<button class="ack" data-act="editClass" data-id="${w.c.id}">Check</button>`:''}</div>`).join('')}</div></section>`:''}
+  ${headsUp(warns)}
   ${S.examples?`<section class="glass banner"><span><b>These are example classes.</b> Explore, then remove them and add your own.</span><button class="btn ghost" data-act="clearEx">Remove examples</button></section>`:''}
   <section><div class="sec-h"><span>Classes</span>${ui.wi?'<span style="color:var(--accent)">Showing what-if</span>':''}</div>
    <div class="glass list">${rows||`<div class="empty"><div>No classes in ${esc(s.name)} yet.</div></div>`}<button class="row tap addrow" data-act="addClass">+ Add class</button></div></section>`;
@@ -895,7 +912,7 @@ function classView(c){
     return `<section><div class="sec-h"><span>${head}</span><span class="num">${st.pct==null?'–':f1(st.pct)+'%'}</span></div><div class="glass list">${items}<button class="row tap addrow" data-act="addItem" data-cat="${k.id}">+ Add assignment</button></div></section>`;
   }).join('');
   const tw=c.categories.reduce((a,k)=>a+(+k.weight||0),0);
-  const cw=warningsFor(c);
+  const cw=wiFilter(warningsFor(c));
   return `<div class="nav"><button class="navbtn glass" data-act="${ui.from==='dash'?'dash':'home'}">‹ ${ui.from==='dash'?'Dashboard':'Grades'}</button><div class="nav-r"><button class="navbtn glass" data-act="importItems" data-id="${c.id}">Import</button><button class="navbtn glass" data-act="editClass" data-id="${c.id}">Edit</button></div></div>
   <section class="glass hero"><div class="meta"><span class="dot" style="display:inline-block;background:var(--c-${c.color});margin-right:6px"></span>${esc(c.name)}</div>
    <div class="hero-top"><div class="big num">${gr==null?'–':`<span data-count="1" data-key="c-${c.id}" data-val="${f1(gr)}" data-dec="1">${f1(gr)}</span>`}<small>%</small></div>${c.status?`<span class="badge g-S">${c.status}</span>`:L?letterBadge('h'+c.id,L):''}</div>
@@ -1022,7 +1039,7 @@ const ICON_S='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 function render(){
   const tabsEl=document.getElementById('tabs');
   if(!S&&!isGate(ui.route.view)){ afterLoad(); return; }
-  if(isGate(ui.route.view)){ app.innerHTML=ui.route.view==='auth'?authView():ui.route.view==='setup'?setupView():ui.route.view==='paywall'?paywallView():ui.route.view==='welcome'?welcomeView():loadingView(); tabsEl.hidden=true; ui.lastRoute=ui.route.view; return; }
+  if(isGate(ui.route.view)){ app.innerHTML=ui.route.view==='auth'?authView():ui.route.view==='setup'?setupView():ui.route.view==='paywall'?paywallView():ui.route.view==='welcome'?welcomeView():loadingView(); tabsEl.hidden=true; ui.lastRoute=ui.route.view; document.body.classList.remove('wi-on'); return; }
   tabsEl.hidden=false;
   const r=ui.route; let c=null;
   if(r.view==='class'){c=findClass(r.id); if(!c) ui.route={view:'home'};}
@@ -1032,6 +1049,8 @@ function render(){
   ui.lastRoute=rk; countUp(); if(ui.route.view==='dash') wireChart();
   if(tourAt>=0&&document.getElementById('tour')) requestAnimationFrame(placeTour); else maybeTour();
   renderTabs();
+  let gl=document.getElementById('wiGlow'); if(!gl){ gl=document.createElement('div'); gl.id='wiGlow'; gl.setAttribute('aria-hidden','true'); document.body.appendChild(gl); }
+  document.body.classList.toggle('wi-on',!!ui.wi&&(ui.route.view==='home'||ui.route.view==='class'));
 }
 
 /* ---------- dashboard ---------- */
@@ -1131,7 +1150,7 @@ function dashView(){
   const items=s.classes.flatMap(gradedItems), recentN=items.filter(x=>x.i.date&&x.i.date>wk&&x.i.date<=T).length;
   const m=chartModel(), W=Math.max(280,Math.min(588,(app.clientWidth||360)-34));
   const anyDated=items.some(x=>x.i.date), undatedN=items.filter(x=>!x.i.date).length;
-  const warns=s.classes.flatMap(warningsFor);
+  const warns=[...friendReqWarns(),...s.classes.flatMap(warningsFor)];
   const dateTitle=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const rows=m.series.map(x=>{const now=classGrade(x.c,false), before=valAt(x.pts,wk), ch=before==null||now==null?null:now-before, L=now==null?null:letterFor(now);
     return `<button class="row tap" data-act="open" data-id="${x.c.id}"><span class="dot" style="background:${x.col}"></span><span class="main"><div class="t">${esc(x.c.name)}</div><div class="s num">${now==null?'No grades':f1(now)+'%'}</div></span>${sparkSvg(x,m.start)}<span class="chg num ${ch==null||Math.abs(ch)<.05?'':ch>0?'up':'down'}">${ch==null?'–':Math.abs(ch)<.05?'0.0':(ch>0?'▲ ':'▼ ')+Math.abs(ch).toFixed(1)}</span>${L?letterBadge('d'+x.c.id,L):''}</button>`;}).join('');
@@ -1142,7 +1161,7 @@ function dashView(){
   <section class="tiles"><div class="tile glass"><small>Semester GPA</small><b class="num" ${gNow!=null?`data-count="1" data-key="dgpa" data-val="${gNow.toFixed(2)}" data-dec="2"`:''}>${gNow!=null?gNow.toFixed(2):'–'}</b>${delta(gNow,gMo,2,'')}${gMo!=null&&gNow!=null?` since ${shortDate(mo)}</span>`:''}</div>
    <div class="tile glass"><small>Average</small><b class="num">${aNow!=null?`<span data-count="1" data-key="davg" data-val="${f1(aNow)}" data-dec="1">${f1(aNow)}</span>%`:'–'}</b>${delta(aNow,aWk,1,'')}${aWk!=null&&aNow!=null?` since ${shortDate(wk)}</span>`:''}</div>
    <div class="tile glass"><small>Graded</small><b class="num">${items.length}</b><span class="d">${recentN} since ${shortDate(wk)}</span></div></section>
-  ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:w.kind==='setup'||w.kind==='weights'?`<button class="ack" data-act="editClass" data-id="${w.c.id}">Check</button>`:''}</div>`).join('')}</div></section>`:''}
+  ${headsUp(warns)}
   ${progressCard(s)}
   <section class="glass card"><div class="ch-head"><h2>Grade history</h2><div class="seg small">${[['1m','1M'],['3m','3M'],['sem','Semester']].map(([v,l])=>`<button data-act="range" data-v="${v}" class="${ui.range===v?'on':''}">${l}</button>`).join('')}</div></div>
    ${m.series.length?`<div class="legend">${m.series.map(x=>`<button class="lg ${ui.focus&&ui.focus!==x.c.id?'dim':''}" data-act="focus" data-id="${x.c.id}" aria-pressed="${ui.focus===x.c.id}"><i style="background:${x.col}"></i>${esc(x.c.name)}</button>`).join('')}</div>

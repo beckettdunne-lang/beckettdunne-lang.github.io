@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>Grade Book</title>
-<meta name="description" content="Track your class grades, see your GPA, and know what you need on the final. Free for 3 days, then $5 once.">
+<meta name="description" content="Track your class grades, see your GPA, and know what you need on the final. $5, paid once.">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
@@ -262,6 +262,12 @@ mark{background:rgba(255,204,0,.38);color:inherit;border-radius:3px;padding:0 1p
 .prow .s{grid-column:1/-1;font-size:13px;color:var(--fg2)}
 /* Report card */
 .rc-ic{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none;font-weight:700}
+.help{width:24px;height:24px;border-radius:50%;background:var(--fill);color:var(--accent);font-size:14px;font-weight:700;line-height:1;display:inline-grid;place-items:center;flex:none;padding:0;text-transform:none;letter-spacing:0}
+#helpPop .hp-bg{position:fixed;inset:0;z-index:60;background:rgba(10,12,20,.35)}
+#helpPop .hp-card{position:fixed;z-index:61;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(420px,calc(100vw - 32px));background:var(--bg);color:var(--fg);border-radius:20px;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(10,12,20,.25)}
+#helpPop h3{margin:0 0 8px;font-size:18px}
+#helpPop p{margin:0 0 14px;font-size:15px;line-height:1.5;color:var(--fg2)}
+#helpPop p b{color:var(--fg)}
 #tour .blk{position:fixed;inset:0;z-index:48}
 #tour .spot{position:fixed;z-index:49;border-radius:16px;box-shadow:0 0 0 200vmax rgba(10,12,20,.55);pointer-events:none;transition:left .25s,top .25s,width .25s,height .25s}
 #tour .bub{position:fixed;z-index:50;width:min(320px,calc(100vw - 32px));background:var(--bg);color:var(--fg);border-radius:18px;padding:16px 16px 12px;box-shadow:0 12px 40px rgba(10,12,20,.25)}
@@ -367,21 +373,17 @@ const SB_LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm';
 let sb=null, curUid=null;
 const isGate=v=>v==='loading'||v==='auth'||v==='setup'||v==='paywall'||v==='welcome';
 
-/* ---------- free trial and purchase (Lemon Squeezy) ---------- */
-const TRIAL_DAYS=3, PRICE='$5', GRACE=12*36e5;
+/* ---------- one-time purchase (Lemon Squeezy) ---------- */
+const PRICE='$5';
 const CHECKOUT=(()=>{const u=String(window.GB_CHECKOUT||'').trim(); return /^https:\/\//.test(u)?u:'';})();
-const BILLING_URL=(()=>{try{return CHECKOUT?new URL(CHECKOUT).origin+'/billing':'';}catch(e){return '';}})();
-// ui.pay.state: free | paid | trial | cancelled (trial cancelled, still usable until it ends) | payfail | none
-const hasAccess=()=>!ui.pay||['free','paid','trial','cancelled'].includes(ui.pay.state);
+// ui.pay.state: free (free forever) | paid | none (hasn't bought it yet)
+const hasAccess=()=>!ui.pay||ui.pay.state==='free'||ui.pay.state==='paid';
 const locked=()=>!hasAccess();
-const trialLeft=()=>ui.pay&&ui.pay.ends?Math.max(0,Math.ceil((ui.pay.ends-Date.now())/864e5)):null;
-const trialEndStr=()=>ui.pay&&ui.pay.ends?new Date(ui.pay.ends).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
 async function loadAccess(u){
-  const {data,error}=await sb.from('access').select('trial_ends_at,paid_at,free_forever,sub_id,sub_status,portal_url').eq('user_id',u.id).maybeSingle();
+  const {data,error}=await sb.from('access').select('paid_at,free_forever').eq('user_id',u.id).maybeSingle();
   if(error) return;
-  const d=data||{}, ends=Date.parse(d.trial_ends_at)||0, now=Date.now(), st=d.sub_status||'';
-  const state=d.free_forever?'free':(d.paid_at||st==='active')?'paid':(st==='on_trial'&&ends+GRACE>now)?'trial':(st==='cancelled'&&ends>now)?'cancelled':(st==='past_due'||st==='unpaid')?'payfail':'none';
-  ui.pay={state,ends,hadTrial:!!d.sub_id,portal:d.portal_url||BILLING_URL};
+  const d=data||{};
+  ui.pay={state:d.free_forever?'free':d.paid_at?'paid':'none'};
 }
 function checkoutUrl(){
   const q=[['checkout[custom][user_id]',curUid],['checkout[email]',ui.acct&&ui.acct.email],['checkout[name]',ui.acct&&ui.acct.name]].filter(([,v])=>v).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
@@ -390,8 +392,7 @@ function checkoutUrl(){
 function buyNow(){ if(CHECKOUT&&curUid) location.href=checkoutUrl(); }
 function unlocked(prev){
   ui.payMsg=''; if(S) save();
-  if(ui.pay.state==='trial'&&prev!=='trial') celebrate([],'Your free trial has started.');
-  else if((ui.pay.state==='paid')&&prev!=='paid') celebrate([],'Thanks! Grade Book is yours to keep.');
+  if(ui.pay.state==='paid'&&prev!=='paid') celebrate([],'Thanks! Grade Book is yours to keep.');
 }
 async function payCheck(manual){
   if(!sb||!curUid||ui.checking) return;
@@ -405,23 +406,8 @@ async function payCheck(manual){
   }
   ui.checking=false;
   if(hasAccess()){ afterLoad(); unlocked(prev); return; }
-  ui.payMsg=manual?'Nothing found yet. If you just finished checkout, wait a minute and try again.':'Your trial hasn\'t shown up yet. It can take a minute. Tap "I already did this" to check again.';
+  ui.payMsg=manual?'No payment found yet. If you just paid, wait a minute and try again.':'Your payment hasn\'t shown up yet. It can take a minute. Tap "I already paid" to check again.';
   render();
-}
-async function cancelTrial(){
-  if(!sb) return;
-  ui.payMsg=''; ui.checking=true; render();
-  let msg='';
-  try{
-    const {data,error}=await sb.functions.invoke('cancel-trial',{method:'POST'});
-    if(error){ let b=null; try{b=await error.context.json();}catch(e){} msg=(b&&b.error)||'Could not cancel. Check your connection and try again.'; }
-    else if(!data||!data.ok) msg=(data&&data.error)||'Could not cancel. Try again.';
-  }catch(e){ msg='Could not cancel. Check your connection and try again.'; }
-  ui.checking=false;
-  if(msg){ ui.payMsg=msg; render(); return; }
-  try{ const u=(await sb.auth.getUser()).data.user; if(u) await loadAccess(u); }catch(e){}
-  if(ui.pay&&ui.pay.state==='trial') ui.pay.state='cancelled';
-  toast("Trial cancelled. Your card won't be charged."); render();
 }
 const legalLinks=()=>`<p class="note" style="text-align:center"><a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>`;
 function afterLoad(){
@@ -486,7 +472,7 @@ async function onUser(u){
   ui.carry=null;
   ui.pay=null; try{ await loadAccess(u); }catch(e){}
   afterLoad();
-  if(/[?&]paid=/.test(location.search)){ history.replaceState(null,'',location.pathname); if(locked()) payCheck(false); else if(ui.pay&&ui.pay.state==='trial'&&!ui.pay.seen){ ui.pay.seen=1; celebrate([],'Your free trial has started.'); } }
+  if(/[?&]paid=/.test(location.search)){ history.replaceState(null,'',location.pathname); if(locked()) payCheck(false); }
 }
 // Pick up changes made on another device when you come back to this tab or app.
 document.addEventListener('visibilitychange',async()=>{
@@ -709,7 +695,29 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&tourAt>=0&&documen
 
 /* ---------- views ---------- */
 const app=document.getElementById('app');
-function wiSwitch(){return `<button class="wi glass" data-act="wi" aria-pressed="${ui.wi}">What-if<span class="sw ${ui.wi?'on':''}"></span></button>`;}
+function wiSwitch(){return `<span style="display:inline-flex;align-items:center;gap:6px"><button class="wi glass" data-act="wi" aria-pressed="${ui.wi}">What-if<span class="sw ${ui.wi?'on':''}"></span></button>${helpBtn('whatif')}</span>`;}
+
+/* ---------- "?" help ---------- */
+const HELP={
+  mode:['Weighted % or Total points?',"<b>Weighted %:</b> each category is a set part of your grade, like Tests 40% and Homework 20%. Most syllabuses list these percents.<br><br><b>Total points:</b> your grade is all the points you've earned divided by all the points possible. Pick this if your teacher grades by points and doesn't give category percents."],
+  cats:['Categories',"Categories are the groups your teacher puts assignments in, like Homework or Tests. Make one for each category on your syllabus.<br><br>In a weighted class, type each category's percent. They should add up to 100%. In a total points class, points each is the usual range for one assignment, like 1–5 for homework."],
+  credits:['Credits',"Credits are how much a class counts in your GPA. Most full-year classes are 1 credit and half-year classes are 0.5, but schools differ, so check your report card or course list.<br><br>A class with 0 credits doesn't count in your GPA."],
+  status:['Status',"Leave this on Graded for most classes. Pick CR or NC for a pass/fail class, or INC or MED if your school marked the class that way.<br><br>Classes with one of these statuses don't count in your GPA."],
+  whatif:['What-if',"Use What-if to try a score you haven't gotten yet. Add the assignment and turn on What-if score. Then turn on the What-if switch to see your grade with that score counted.<br><br>Turn the switch off to see your real grade. What-if scores never change your real grade or your report card."],
+  final:['What do I need on the final?',"In a weighted class, tap the category your final exam is in. In a total points class, type how many points the final is worth.<br><br>Grade Book shows the lowest score you need on the final to end the class with each letter grade, based on your grades so far. \"Locked in\" means you'll get that letter no matter what. A number over 100% means you can't reach that letter without extra credit."],
+  scale:['Grade scale',"Min % is the lowest percent that earns each letter. Points is what each letter is worth in your GPA, like 4.0 for an A.<br><br>Change these to match your school's scale. It's usually in the student handbook, on your school's website, or on a syllabus."],
+  round:['Round to whole percent',"Some schools round your percent to the nearest whole number before giving a letter, so 93.6% counts as 94%. If your school does this, turn it on. If you're not sure, ask a teacher."]
+};
+const helpBtn=k=>`<button type="button" class="help" data-act="help" data-k="${k}" aria-label="What is ${esc(HELP[k][0])}?">?</button>`;
+function showHelp(k){
+  const h=HELP[k]; if(!h) return; closeHelp();
+  const el=document.createElement('div'); el.id='helpPop';
+  el.innerHTML=`<div class="hp-bg" data-help-close></div><div class="hp-card" role="dialog" aria-modal="true" aria-labelledby="hp-h"><h3 id="hp-h">${h[0]}</h3><p>${h[1]}</p><button class="btn block" data-help-close>Got it</button></div>`;
+  document.body.appendChild(el); el.querySelector('.btn').focus({preventScroll:true});
+}
+function closeHelp(){ const el=document.getElementById('helpPop'); if(el) el.remove(); }
+document.addEventListener('click',e=>{ if(e.target.closest('[data-help-close]')){ e.stopPropagation(); closeHelp(); } },true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&document.getElementById('helpPop')){ e.stopImmediatePropagation(); closeHelp(); } },true);
 
 function homeView(){
   const s=sem(); const g=gpaOf(s.classes,ui.wi);
@@ -782,7 +790,7 @@ function calcView(c){
     else body=`<div class="need">${targets.map(r=>{const T=S.round?r.min-.5:r.min;return `<div><b>${esc(r.l)}</b>${out((T-cur*(1-w))/w)}</div>`;}).join('')}</div>
       <p class="note">"${esc(fc.name)}" is ${f1(w*100)}% of your grade. Everything else averages ${f1(cur)}% right now. Categories with no scores yet are assumed to match that average.</p>`;
   }
-  return `<section class="glass calc"><h2>What do I need on the final?</h2>${c.mode==='points'?'':`<div class="chips">${chips}</div>`}${body}</section>`;
+  return `<section class="glass calc"><h2 style="display:flex;align-items:center;gap:8px">What do I need on the final? ${helpBtn('final')}</h2>${c.mode==='points'?'':`<div class="chips">${chips}</div>`}${body}</section>`;
 }
 
 function loadingView(){ return `<div class="empty" style="padding-top:30vh"><span class="spin"></span><div>Loading your grades…</div></div>`; }
@@ -822,51 +830,39 @@ function welcomeView(){
   return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">gradebook.fun</div><h1>Grade Book</h1></div>
    <p class="note" style="font-size:16px">A simple place to keep your grades and work out your GPA.</p></header>
   <section class="glass list">${pts.map(([t,d])=>`<div class="row"><span class="main"><div class="t">${t}</div><div class="s">${d}</div></span></div>`).join('')}</section>
-  <p class="note" style="font-size:15px;padding:0 4px">Free for ${TRIAL_DAYS} days, then ${PRICE} once. You add a card to start the free trial. If you don't cancel before it ends, your card is charged ${PRICE} one time. There's no subscription.</p>
+  <p class="note" style="font-size:15px;padding:0 4px">Grade Book costs ${PRICE}, paid once. There's no subscription and no monthly fee. You make an account, then buy it at checkout.</p>
   <button class="btn block" data-act="auMode" data-v="up">Create an account</button>
   <div style="display:grid;justify-items:center"><button class="addrow" data-act="auMode" data-v="in" style="font-size:15px">Already have an account? Sign in</button></div>
   ${legalLinks()}`;
 }
 function paywallView(){
-  const p=ui.pay||{state:'none'}, fail=p.state==='payfail', again=!fail&&p.hadTrial;
-  const title=fail?"Your payment didn't go through":again?'Your free trial is over':'Start your free trial';
-  const body=fail?`We couldn't charge your card ${PRICE} when your free trial ended. Update your card to keep using Grade Book. Your grades are still saved.`
-    :again?`Your card wasn't charged. To keep using Grade Book, start again: it's ${TRIAL_DAYS} days free, then ${PRICE} once. Your grades are still saved.`
-    :`Grade Book is free for ${TRIAL_DAYS} days. To start, add a card at checkout. Your card is checked but not charged.`;
-  const terms=fail?'':`<section class="glass list">
-    <div class="row"><span class="main"><div class="t">Today: $0</div><div class="s">Your ${TRIAL_DAYS}-day free trial starts.</div></span></div>
-    <div class="row"><span class="main"><div class="t">After ${TRIAL_DAYS} days: ${PRICE}, one time</div><div class="s">Charged to your card unless you cancel before the trial ends. It won't renew.</div></span></div>
-    <div class="row"><span class="main"><div class="t">Cancel anytime during the trial</div><div class="s">Go to Settings and tap Cancel free trial. You won't be charged.</div></span></div></section>`;
-  return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Grade Book</div><h1>${title}</h1></div>
-   <p class="note" style="font-size:15px">${body}</p></header>
-  ${terms}
+  return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Grade Book</div><h1>Buy Grade Book</h1></div>
+   <p class="note" style="font-size:15px">Grade Book costs ${PRICE}, paid once. Buy it to start adding your classes and grades.</p></header>
+  <section class="glass list">
+    <div class="row"><span class="main"><div class="t">${PRICE}, one time</div><div class="s">You pay once at checkout. There's no subscription, and you won't be charged again.</div></span></div>
+    <div class="row"><span class="main"><div class="t">Yours to keep</div><div class="s">Your account and grades stay available on your phone and your computer.</div></span></div></section>
   ${ui.checking?`<p class="note" role="status"><span class="spin"></span> Checking…</p>`:''}
   ${ui.payMsg?`<p class="note" role="status" style="color:var(--orange)">${esc(ui.payMsg)}</p>`:''}
-  ${fail?(p.portal?`<a class="btn block" style="text-align:center;text-decoration:none" href="${esc(p.portal)}" target="_blank" rel="noopener">Update card</a>`:''):CHECKOUT?`<button class="btn block" data-act="buy">Start ${TRIAL_DAYS}-day free trial</button>`:`<p class="note">Signing up opens soon. Check back in a few days.</p>`}
-  ${fail||!CHECKOUT?'':`<p class="note" style="text-align:center;margin-top:-10px">By starting the trial, you agree to the <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy Policy</a>.</p>`}
-  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">${CHECKOUT||fail?`<button class="btn ghost" data-act="payCheck">${fail?'I updated it':'I already did this'}</button>`:''}${S?`<button class="btn ghost" data-act="export">Download my grades</button>`:''}</div>
+  ${CHECKOUT?`<button class="btn block" data-act="buy">Buy Grade Book for ${PRICE}</button>
+  <p class="note" style="text-align:center;margin-top:-10px">By buying Grade Book, you agree to the <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy Policy</a>.</p>`:`<p class="note">Buying Grade Book opens soon. Check back in a few days.</p>`}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">${CHECKOUT?`<button class="btn ghost" data-act="payCheck">I already paid</button>`:''}${S?`<button class="btn ghost" data-act="export">Download my grades</button>`:''}</div>
   ${ui.msg?`<p class="note" role="status" style="text-align:center">${esc(ui.msg)}</p>`:''}
   ${ui.acct?`<p class="note" style="text-align:center">Signed in as ${esc(ui.acct.name||ui.acct.email)} · <button class="addrow" data-act="signOut">Sign out</button></p>`:''}`;
 }
-function trialRow(compact){
+function payRow(){
   const p=ui.pay; if(!p) return '';
-  if(p.state==='free') return compact?'':`<div class="row"><span class="main"><div class="t">Grade Book is free for you</div><div class="s">Your account has free access for good.</div></span></div>`;
-  if(p.state==='paid') return compact?'':`<div class="row"><span class="main"><div class="t">Grade Book is paid for</div><div class="s">Thanks for buying it. You have it for good.</div></span></div>`;
-  const n=trialLeft(), d=trialEndStr();
-  if(p.state==='cancelled') return `<div class="row"><span class="main"><div class="t">Free trial cancelled</div><div class="s">Your card won't be charged. You can keep using Grade Book until ${d}.</div></span></div>`;
-  if(p.state!=='trial') return '';
-  if(p.ends<=Date.now()) return `<div class="row"><span class="main"><div class="t">Your free trial has ended</div><div class="s">Your ${PRICE} payment is processing. This can take a few minutes.</div></span></div>`;
-  const t=n<=1?'Your free trial ends today':`${n} days left in your free trial`;
-  return `<div class="row"><span class="main"><div class="t">${t}</div><div class="s">On ${d}, your card is charged ${PRICE} one time unless you cancel before then.</div>${!compact&&ui.payMsg?`<div class="s" role="status" style="color:var(--orange);margin-top:4px">${esc(ui.payMsg)}</div>`:''}</span>${compact?'':`<button class="ack" data-act="cancelTrial" data-confirm ${ui.checking?'disabled':''}>Cancel free trial</button>`}</div>`;
+  if(p.state==='free') return `<div class="row"><span class="main"><div class="t">Grade Book is free for you</div><div class="s">Your account has free access for good.</div></span></div>`;
+  if(p.state==='paid') return `<div class="row"><span class="main"><div class="t">Grade Book is paid for</div><div class="s">Thanks for buying it. You have it for good.</div></span></div>`;
+  return '';
 }
 
 function settingsView(){
   const rows=sortedScale().map(r=>`<div class="fr"><span class="l">${esc(r.l)}</span><span style="flex:1"></span><input class="num" inputmode="decimal" aria-label="${esc(r.l)} minimum percent" data-scale="${esc(r.l)}" data-f="min" value="${r.min}"><input class="num" inputmode="decimal" aria-label="${esc(r.l)} grade points" data-scale="${esc(r.l)}" data-f="gp" value="${r.gp.toFixed(1)}"></div>`).join('');
   const sync={account:'Your grades save to your account. Sign in on any device to see them.',device:'Saved in this browser only. Other devices and browsers will not see these grades.',error:'Could not reach your account. Changes are saved in this browser for now.'}[ui.sync];
   return `<header class="lt"><h1>Settings</h1></header>
-  <section><div class="sec-h"><span>Account</span></div><div class="glass list">${trialRow(false)}${ui.acct?`<div class="row"><span class="main"><div class="t">${esc(ui.acct.name||ui.acct.email||'Signed in')}</div>${ui.acct.name&&ui.acct.email?`<div class="s">${esc(ui.acct.email)}</div>`:''}<div class="s">${sync}</div></span></div>${ui.acct.name?'':`<div class="fr"><label for="acct-n">Name</label><input id="acct-n" value="${esc(S.name||'')}" placeholder="Add your name" autocomplete="name" autocapitalize="words" style="text-align:left"><button class="ack" data-act="saveName">Save</button></div><div id="acct-msg" class="note" role="status" style="padding:0 14px 10px"></div>`}<div class="row"><button class="btn ghost" data-act="signOut">Sign out</button></div>`:`<div class="row"><span class="main"><div class="t">Not signed in</div><div class="s">${sync}</div></span></div>${CFG?`<div class="row"><button class="btn ghost" data-act="toAccount">Sign in to sync your grades</button></div>`:''}`}</div></section>
-  <section><div class="sec-h"><span>Grade scale</span></div><div class="glass list scale"><div class="fr hd"><span class="l">Grade</span><span style="flex:1"></span><span style="width:70px;text-align:right">Min %</span><span style="width:70px;text-align:right">Points</span></div>${rows}</div></section>
-  <section class="glass list"><div class="fr"><label>Round to whole percent</label><span style="flex:1"></span><button class="sw ${S.round?'on':''}" data-act="round" aria-pressed="${S.round}" aria-label="Round to whole percent"></button></div></section>
+  <section><div class="sec-h"><span>Account</span></div><div class="glass list">${payRow()}${ui.acct?`<div class="row"><span class="main"><div class="t">${esc(ui.acct.name||ui.acct.email||'Signed in')}</div>${ui.acct.name&&ui.acct.email?`<div class="s">${esc(ui.acct.email)}</div>`:''}<div class="s">${sync}</div></span></div>${ui.acct.name?'':`<div class="fr"><label for="acct-n">Name</label><input id="acct-n" value="${esc(S.name||'')}" placeholder="Add your name" autocomplete="name" autocapitalize="words" style="text-align:left"><button class="ack" data-act="saveName">Save</button></div><div id="acct-msg" class="note" role="status" style="padding:0 14px 10px"></div>`}<div class="row"><button class="btn ghost" data-act="signOut">Sign out</button></div>`:`<div class="row"><span class="main"><div class="t">Not signed in</div><div class="s">${sync}</div></span></div>${CFG?`<div class="row"><button class="btn ghost" data-act="toAccount">Sign in to sync your grades</button></div>`:''}`}</div></section>
+  <section><div class="sec-h"><span style="display:flex;align-items:center;gap:6px">Grade scale ${helpBtn('scale')}</span></div><div class="glass list scale"><div class="fr hd"><span class="l">Grade</span><span style="flex:1"></span><span style="width:70px;text-align:right">Min %</span><span style="width:70px;text-align:right">Points</span></div>${rows}</div></section>
+  <section class="glass list"><div class="fr"><label>Round to whole percent</label>${helpBtn('round')}<span style="flex:1"></span><button class="sw ${S.round?'on':''}" data-act="round" aria-pressed="${S.round}" aria-label="Round to whole percent"></button></div></section>
   <p class="note" style="padding:0 16px;margin-top:-12px">Off: 93.6% is an A-. On: 93.6% rounds to 94% and is an A. Ask your teacher which one your school uses.</p>
   <section><div class="sec-h"><span>Not counted in GPA</span></div><div class="glass list">${Object.entries(STATUSES).filter(([k])=>k).map(([k,v])=>`<div class="row"><span class="badge g-S">${k}</span><span class="main">${esc(v.split('· ')[1])}</span></div>`).join('')}</div></section>
   <section><div class="sec-h"><span>Backup</span></div><div class="glass list"><div class="row"><span class="main"><div class="s">Export saves all your grades to a file. Import loads that file on another device. You can add it to the grades here or replace them.</div>${ui.msg?`<div class="s" role="status" style="color:var(--accent);margin-top:6px">${esc(ui.msg)}</div>`:''}</span></div>
@@ -1006,7 +1002,6 @@ function dashView(){
   <section class="tiles"><div class="tile glass"><small>Semester GPA</small><b class="num" ${gNow!=null?`data-count="1" data-key="dgpa" data-val="${gNow.toFixed(2)}" data-dec="2"`:''}>${gNow!=null?gNow.toFixed(2):'–'}</b>${delta(gNow,gMo,2,'')}${gMo!=null&&gNow!=null?` since ${shortDate(mo)}</span>`:''}</div>
    <div class="tile glass"><small>Average</small><b class="num">${aNow!=null?`<span data-count="1" data-key="davg" data-val="${f1(aNow)}" data-dec="1">${f1(aNow)}</span>%`:'–'}</b>${delta(aNow,aWk,1,'')}${aWk!=null&&aNow!=null?` since ${shortDate(wk)}</span>`:''}</div>
    <div class="tile glass"><small>Graded</small><b class="num">${items.length}</b><span class="d">${recentN} since ${shortDate(wk)}</span></div></section>
-  ${ui.pay&&(ui.pay.state==='trial'||ui.pay.state==='cancelled')?`<section class="glass list">${trialRow(true)}</section>`:''}
   ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:w.kind==='setup'||w.kind==='weights'?`<button class="ack" data-act="editClass" data-id="${w.c.id}">Check</button>`:''}</div>`).join('')}</div></section>`:''}
   ${progressCard(s)}
   <section class="glass card"><div class="ch-head"><h2>Grade history</h2><div class="seg small">${[['1m','1M'],['3m','3M'],['sem','Semester']].map(([v,l])=>`<button data-act="range" data-v="${v}" class="${ui.range===v?'on':''}">${l}</button>`).join('')}</div></div>
@@ -1028,10 +1023,9 @@ function openSheet(title,html,save,saveLabel='Save'){
   const first=root.querySelector('input'); if(first&&!first.value) setTimeout(()=>first.focus(),250);
 }
 function deleteAccountSheet(){
-  const p=ui.pay||{}, trial=p.state==='trial'||p.state==='payfail', paid=p.state==='paid';
+  const p=ui.pay||{}, paid=p.state==='paid';
   root.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Delete account"><div class="grab"></div><div class="sh-h"><button data-act="close">Cancel</button><h3>Delete account</h3><span style="width:60px"></span></div><div class="form" id="sf">
    <p class="note" style="font-size:15px;color:var(--fg)">This permanently deletes your account${ui.acct&&ui.acct.email?` (${esc(ui.acct.email)})`:''} and all your grades. You can't undo it.</p>
-   ${trial?`<p class="note" style="font-size:15px">Your free trial will be cancelled, so your card won't be charged.</p>`:''}
    ${paid?`<p class="note" style="font-size:15px">Deleting your account doesn't refund your ${PRICE}. If you want a refund, email beckettdunne@gmail.com before you delete it.</p>`:''}
    <button class="btn ghost block" data-act="export">Download my grades first</button>
    <p id="del-msg" class="note" role="alert" style="color:var(--red);min-height:1.2em;margin:0"></p>
@@ -1110,11 +1104,11 @@ function classSheet(c){
   openSheet(isNew?'New class':'Edit class',`
    ${sample?`<p class="hint" style="margin:0;color:var(--orange);font-weight:600">The categories below are samples. Change them to match this class's syllabus, then tap ${isNew?'Add':'Save'}.</p>`:''}
    <div class="fl"><div class="fr"><label for="c-n">Name</label><input id="c-n" value="${esc(c.name)}" placeholder="Chemistry"></div>
-    <div class="fr"><label for="c-cr">Credits</label><input id="c-cr" class="num" inputmode="decimal" value="${c.credits}"></div>
+    <div class="fr"><label for="c-cr">Credits</label>${helpBtn('credits')}<input id="c-cr" class="num" inputmode="decimal" value="${c.credits}"></div>
     <div class="fr"><label>Color</label><div class="colors" id="c-col">${COLORS.map(k=>`<button type="button" data-col="${k}" aria-label="${k}" class="${k===color?'on':''}" style="background:var(--c-${k})"></button>`).join('')}</div></div>
-    <div class="fr"><label for="c-st">Status</label><select id="c-st">${Object.entries(STATUSES).map(([k,v])=>`<option value="${k}" ${k===(c.status||'')?'selected':''}>${esc(v)}</option>`).join('')}</select></div></div>
-   <div class="fl"><div class="fr">${segHtml('mode',[['weighted','Weighted %'],['points','Total points']],c.mode)}</div></div>
-   <div><div class="sec-h"><span>Categories</span><span id="c-tot"></span></div>
+    <div class="fr"><label for="c-st">Status</label>${helpBtn('status')}<select id="c-st">${Object.entries(STATUSES).map(([k,v])=>`<option value="${k}" ${k===(c.status||'')?'selected':''}>${esc(v)}</option>`).join('')}</select></div></div>
+   <div class="fl"><div class="fr">${segHtml('mode',[['weighted','Weighted %'],['points','Total points']],c.mode)}${helpBtn('mode')}</div></div>
+   <div><div class="sec-h"><span style="display:flex;align-items:center;gap:6px">Categories ${helpBtn('cats')}</span><span id="c-tot"></span></div>
     <div class="fl cats" id="c-cats"></div>
     <p class="hint" style="margin-top:8px">Weighted classes: weight is the category's % of your grade. Total points classes: points each is the usual range, like 1–5 for homework.</p></div>
    ${isNew?'':delBtn('Delete class')}`,()=>{
@@ -1168,8 +1162,8 @@ document.addEventListener('click',e=>{
     case 'signOut': signOutNow(); return;
     case 'buy': buyNow(); return;
     case 'payCheck': payCheck(true); return;
-    case 'cancelTrial': cancelTrial(); return;
     case 'delAcct': deleteAccountSheet(); return;
+    case 'help': showHelp(t.dataset.k); return;
     case 'delAcctGo': deleteAccount(); return;
     case 'saveName': saveName(); return;
     case 'suAdd': {ui.setup.classes.push(''); render(); const ins=app.querySelectorAll('[data-su="c"]'); if(ins.length) ins[ins.length-1].focus(); return;}

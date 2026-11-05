@@ -6,6 +6,124 @@ The old address, https://beckettdunne-lang.github.io/gradebook/, forwards here.
 
 Grade Book is one page (`index.html`). `CNAME` sets the custom domain for GitHub Pages. With sign-in turned on, each person's grades are saved to their account in Supabase. Without it, grades stay in the browser.
 
+## Do it yourself
+
+Step-by-step instructions for the jobs you'll do most often. Most only need a web browser.
+
+Where things are:
+
+| What | Where |
+|---|---|
+| The website's code | This repo on github.com, branch `main` |
+| Accounts, grades, who paid, friends | supabase.com, project "Gradebook" |
+| Payments, orders, refunds | app.lemonsqueezy.com, store "gradebook" |
+| The domain gradebook.fun | hostinger.com |
+
+### Go live when Lemon Squeezy approves the store
+
+Do these in order. Until step 6, nobody can pay real money.
+
+1. **Payouts.** In Lemon Squeezy, open Settings > Payouts and make sure a bank account or PayPal is added. This is where your money goes.
+2. **Copy the product to live mode.** With test mode still on, open Products, click the **...** next to Grade Book, and choose **Copy to live mode**.
+3. **Turn off test mode.** It's the switch at the bottom left of the Lemon Squeezy dashboard.
+4. **Check the live product.** Open Products > Grade Book. It should be a **Single payment** of $5. Under **Confirmation modal**, the button link should be `https://gradebook.fun/?paid=1`. Save if you changed anything.
+5. **Add the live webhook.** Open Settings > Webhooks and click **+**. Test and live mode have separate webhooks, so this is needed even though the test one exists.
+   - Callback URL: `https://fnbcebulnbhsgpgynbon.supabase.co/functions/v1/lemon-webhook`
+   - Signing secret: the same one you used for the test webhook. If you don't remember it, make up a new long password, and also put it in Supabase: Edge Functions > Secrets > `LEMONSQUEEZY_WEBHOOK_SECRET` > edit. Then the test webhook will stop working, which is fine once you're live.
+   - Events: check `order_created` and `order_refunded`.
+   - Click **Save webhook**.
+6. **Put the live checkout link in the app.**
+   1. In Lemon Squeezy, open Products > Grade Book, click **Share**, and copy the checkout link. It starts with `https://gradebook.lemonsqueezy.com/`.
+   2. On github.com, open this repo and click the file `supabase-config.js`.
+   3. Click the pencil icon (**Edit this file**) at the top right of the file.
+   4. Find the line that starts with `window.GB_CHECKOUT =`. Replace only the link between the quote marks with your new link. Keep the quote marks and the `;` at the end.
+   5. Click **Commit changes...**, keep **Commit directly to the main branch**, and click **Commit changes**.
+   6. Wait 1 to 2 minutes, then check the **Actions** tab. The newest run should have a green check. See "The site didn't update" below if it's red.
+7. **Test with real money.** In a private browser window, make a new account on gradebook.fun, tap **Buy Grade Book for $5**, and pay with a real card. You should land back in Grade Book with confetti. Then refund yourself (see "Refund someone" below). The app should go back to the Buy screen for that account.
+
+### Give someone free access
+
+1. In Supabase, open your project, then **SQL Editor** > **New query**.
+2. Paste this, and change the email to theirs (keep the quote marks):
+
+   ```sql
+   update public.access set free_forever = true, paid_at = coalesce(paid_at, now()), note = 'free forever'
+   where user_id = (select id from auth.users where lower(email) = 'friend@example.com');
+   ```
+
+3. Click **Run**. It should say 1 row was changed. If it says 0, there's no account with that email yet: check the spelling, or ask them to sign up first.
+4. They may need to reload the page.
+
+To take free access away, run the same thing with `free_forever = false, paid_at = null, note = null`.
+
+### Refund someone
+
+1. In Lemon Squeezy, open **Orders** and find their order. You can search by email.
+2. Click the order, then **Refund**, and confirm.
+3. That's it. Lemon Squeezy tells Grade Book, and their account goes back to the Buy screen. Their grades stay saved.
+
+The Terms promise a full refund if they ask within 14 days of paying. If you'd rather refund them and let them keep using Grade Book, refund them and then give them free access (above).
+
+### See who has paid
+
+In Supabase, open **SQL Editor** > **New query**, paste this, and click **Run**:
+
+```sql
+select u.email, p.username, a.paid_at, a.free_forever, a.note
+from auth.users u
+left join public.access a on a.user_id = u.id
+left join public.profiles p on p.user_id = u.id
+order by u.created_at desc;
+```
+
+`paid_at` is when they paid. Empty means they haven't paid.
+
+### The site didn't update after a change
+
+1. On github.com, open the **Actions** tab. Each change starts a run called "pages build and deployment".
+   - Yellow dot: still working. Wait a few minutes.
+   - Green check: it worked. Reload gradebook.fun with Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows), or open it in a private window.
+   - Red X: it failed. Keep going.
+2. Click the failed run and read the error. If it says **"in progress deployment"** or **"Please cancel ... first"**, a stuck deploy is blocking new ones:
+   1. Open the repo's **Settings > Pages**.
+   2. Under **Build and deployment > Source**, switch to **GitHub Actions**, then switch back to **Deploy from a branch**.
+   3. Pick branch `main` and folder `/ (root)`, and click **Save**.
+   4. Don't touch the **Custom domain** box.
+3. Start a new deploy by making any small commit. For example, open `README.md`, click the pencil, add a space at the end of a line, and commit. Re-running an old failed run usually gets stuck, so make a new commit instead.
+4. Never use the pencil next to **Default branch** in Settings > General. It renames the branch and breaks the site.
+
+### Supabase is paused, or nobody can sign in
+
+The free Supabase plan pauses a project after about a week with no activity. The daily "Keep Supabase awake" workflow (below) normally prevents this. If people can't sign in or see "Could not reach the sign-in service":
+
+1. Sign in at supabase.com and open the project.
+2. If it says the project is paused, click **Restore project**. It takes a few minutes. Grades and accounts are kept.
+3. Check the **Actions** tab for "Keep Supabase awake". If it says scheduled runs are turned off, click the button to turn them back on.
+
+### Someone didn't get their confirmation email
+
+Supabase's built-in email sender only sends a few emails per hour, so emails can be late when several people sign up at once.
+
+- Ask them to wait an hour, check spam, and use **Forgot your password?** on the sign-in page if they still can't get in.
+- If it keeps happening, either turn off **Confirm email** in Supabase (Authentication > Sign In / Providers > Email), or connect a free email service like Resend under Authentication > Emails > SMTP settings.
+
+### Change someone's username
+
+Usernames can't be changed in the app. If someone asks, run this in the SQL Editor (new username must be 3 to 20 lowercase letters, numbers or `_`, and not taken):
+
+```sql
+update public.profiles set username = 'new_name'
+where user_id = (select id from auth.users where lower(email) = 'friend@example.com');
+```
+
+### Delete someone's account
+
+People can do this themselves in Settings > Delete account. To do it for them: in Supabase, open **Authentication > Users**, find their email, click the **...** menu, and choose **Delete user**. Their grades, friends and payment record are deleted with it. This doesn't refund them; do that in Lemon Squeezy first if needed.
+
+### Make a code change with Claude
+
+To have Claude change the site later, start a Claude Code session with this repo, and paste in the "Grade Book: summary so far" notes from your last chat so it knows how everything fits together.
+
 ## Turn on sign-in
 
 1. Make a free account at https://supabase.com and create a project.

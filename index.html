@@ -1287,15 +1287,35 @@ function classSheet(c){
 }
 let classSheetApi=null;
 
+// "Fall 2026" -> "Spring 2027", "Spring 2027" -> "Fall 2027". Other names get no suggestion.
+function nextTermName(name){
+  const m=String(name||'').match(/\b(fall|spring|summer|winter)\s+(\d{4})\b/i); if(!m) return '';
+  const t=m[1].toLowerCase(), y=+m[2];
+  return t==='fall'?`Spring ${y+1}`:t==='winter'?`Spring ${y}`:`Fall ${y}`;
+}
+// A copy of a class with the same setup but no scores.
+function blankCopy(c){
+  const ids={}, categories=c.categories.map(k=>{const id=uid(); ids[k.id]=id; return {id,name:k.name,weight:k.weight,minPts:k.minPts??'',maxPts:k.maxPts??'',items:[]};});
+  return {id:uid(),name:c.name,credits:c.credits,color:c.color,mode:c.mode,status:'',example:false,catsChecked:true,finalCat:c.finalCat&&ids[c.finalCat]||null,finalPoints:c.finalPoints,categories};
+}
 function semSheet(s){
-  const isNew=!s;
-  openSheet(isNew?'New semester':'Semester',`<div class="fl"><div class="fr"><label for="s-n">Name</label><input id="s-n" value="${esc(s?s.name:'')}" placeholder="Spring 2027"></div>
+  const isNew=!s, from=sem(), copyable=isNew?from.classes.filter(c=>!c.example):[];
+  const sug=isNew?nextTermName(from.name):'', taken=sug&&S.semesters.some(x=>x.name.toLowerCase()===sug.toLowerCase());
+  openSheet(isNew?'New semester':'Semester',`<div class="fl"><div class="fr"><label for="s-n">Name</label><input id="s-n" value="${esc(s?s.name:(taken?'':sug))}" placeholder="Spring 2027"></div>
     <div class="fr"><label for="s-a">First day</label><input id="s-a" type="date" value="${esc(s&&s.start||'')}"></div>
     <div class="fr"><label for="s-b">Last day</label><input id="s-b" type="date" value="${esc(s&&s.end||'')}"></div></div>
-    <p class="hint">The dashboard uses these dates to count the weeks left.</p>${!isNew&&S.semesters.length>1?delBtn('Delete semester'):''}`,()=>{
+    <p class="hint">The dashboard uses these dates to count the weeks left.</p>
+    ${copyable.length?`<div class="fl"><div class="fr"><label for="s-copy">Copy classes from ${esc(from.name)}</label><span style="flex:1"></span><button type="button" class="sw on" id="s-copy" data-act="toggleSw" aria-pressed="true" aria-label="Copy classes from ${esc(from.name)}"></button></div></div>
+    <p class="hint">Copies ${copyable.length} class${copyable.length===1?'':'es'} with the same credits, categories and weights, but no scores: ${esc(copyable.map(c=>c.name).join(', '))}. You can edit or delete any of them after.</p>`:''}
+    ${!isNew&&S.semesters.length>1?delBtn('Delete semester'):''}`,()=>{
     const n=val('s-n')||'Semester', a=isDate(val('s-a'))?val('s-a'):'', b=isDate(val('s-b'))?val('s-b'):'';
     if(a&&b&&b<=a) return 'The last day has to be after the first day.';
-    if(isNew){const x={id:uid(),name:n,classes:[],start:a,end:b};S.semesters.push(x);S.curSem=x.id;} else {s.name=n; s.start=a; s.end=b;}
+    if(isNew){
+      const cp=document.getElementById('s-copy'), copy=!!(cp&&cp.classList.contains('on'));
+      const x={id:uid(),name:n,classes:copy?copyable.map(blankCopy):[],start:a,end:b};
+      S.semesters.push(x); S.curSem=x.id; ui.route={view:'home'};
+      if(copy) setTimeout(()=>toast(`Copied ${x.classes.length} class${x.classes.length===1?'':'es'} into ${n}.`),50);
+    } else {s.name=n; s.start=a; s.end=b;}
   },isNew?'Add':'Save');
   sheetDel=()=>{S.semesters=S.semesters.filter(x=>x!==s);S.curSem=S.semesters[0].id;};
 }

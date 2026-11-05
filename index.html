@@ -145,7 +145,7 @@ h1{font-family:var(--font-d);font-size:34px;line-height:1.1;font-weight:700;lett
 .sh-h h3{margin:0;font-size:17px;font-weight:650;text-align:center;flex:1}
 .sh-h button{color:var(--accent);font-weight:500;padding:6px 4px;min-width:64px}
 .sh-h .save{font-weight:700;text-align:right}
-.form{display:grid;gap:18px}
+.form{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .fl{background:var(--glass);border-radius:18px;overflow:hidden;border:1px solid var(--stroke)}
 .fr{display:flex;align-items:center;gap:10px;padding:11px 14px;min-height:48px;position:relative}
 .fr+.fr::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--sep)}
@@ -159,7 +159,7 @@ h1{font-family:var(--font-d);font-size:34px;line-height:1.1;font-weight:700;lett
 .cats .w{max-width:64px;text-align:right}
 .cats .d{max-width:44px;text-align:right}
 .cats .x{color:var(--red);font-size:20px;width:26px}
-.colors{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;flex:1}
+.colors{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;flex:1;min-width:0}
 .colors button{width:28px;height:28px;border-radius:50%;border:3px solid transparent}
 .colors button.on{border-color:var(--fg)}
 .hint{font-size:13px;color:var(--fg2);padding:0 14px;margin:-10px 0 0}
@@ -261,7 +261,15 @@ mark{background:rgba(255,204,0,.38);color:inherit;border-radius:3px;padding:0 1p
 .prow .bar{grid-column:1/-1;height:6px}
 .prow .s{grid-column:1/-1;font-size:13px;color:var(--fg2)}
 /* Report card */
-.rc-ic{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.rc-ic{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none;font-weight:700}
+#tour .blk{position:fixed;inset:0;z-index:48}
+#tour .spot{position:fixed;z-index:49;border-radius:16px;box-shadow:0 0 0 200vmax rgba(10,12,20,.55);pointer-events:none;transition:left .25s,top .25s,width .25s,height .25s}
+#tour .bub{position:fixed;z-index:50;width:min(320px,calc(100vw - 32px));background:var(--bg);color:var(--fg);border-radius:18px;padding:16px 16px 12px;box-shadow:0 12px 40px rgba(10,12,20,.25)}
+#tour .bub small{display:block;font-size:12px;font-weight:600;color:var(--fg3);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+#tour .bub h3{margin:0 0 6px;font-size:18px}
+#tour .bub p{margin:0 0 12px;font-size:15px;line-height:1.45;color:var(--fg2)}
+#tour .bub .acts{display:flex;justify-content:space-between;align-items:center}
+@media (prefers-reduced-motion:reduce){#tour .spot{transition:none}}
 .rc-ic svg{width:17px;height:17px}
 .rc-prev{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--sep);box-shadow:var(--shadow);background:#fff}
 .rc-acts{display:flex;gap:10px;flex-wrap:wrap}
@@ -542,7 +550,7 @@ function setupDone(){
   const st=ui.setup, names=st.classes.map(n=>n.trim()).filter(Boolean);
   if(!names.length){ const el=document.getElementById('su-msg'); if(el) el.textContent='Add at least one class, or tap Try example classes.'; return; }
   const d=new Date(), semName=(d.getMonth()>=6?'Fall ':'Spring ')+d.getFullYear();
-  const sm={id:uid(),name:semName,classes:names.map((n,i)=>({id:uid(),name:n,credits:1,color:COLORS[i%COLORS.length],mode:'weighted',status:'',example:false,finalCat:null,finalPoints:100,categories:defaultCats()}))};
+  const sm={id:uid(),name:semName,classes:names.map((n,i)=>({id:uid(),name:n,credits:1,color:COLORS[i%COLORS.length],mode:'weighted',status:'',example:false,catsChecked:false,finalCat:null,finalPoints:100,categories:defaultCats()}))};
   S={v:1,updatedAt:0,name:(ui.acct&&ui.acct.name)||st.name.trim(),curSem:sm.id,semesters:[sm],scale:DEFAULT_SCALE.map(r=>({...r})),round:false,examples:false};
   save(); ui.setup=null; afterLoad();
 }
@@ -599,8 +607,16 @@ function letterBadge(key,L,extra=''){
 /* ---------- warnings ---------- */
 const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>';
 const ICON_DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
+function setupWarnings(c){
+  const out=[]; if(c.example) return out;
+  if(c.catsChecked===false) out.push({c,kind:'setup',sev:'orange',icon:ICON_WARN,text:`${c.name} is using sample categories. Check them against your syllabus.`,short:'Using sample categories. Check your syllabus.'});
+  else if(c.mode!=='points'&&c.categories.length){ const tw=c.categories.reduce((a,k)=>a+(+k.weight||0),0);
+    if(Math.abs(tw-100)>0.01) out.push({c,kind:'weights',sev:'orange',icon:ICON_WARN,text:`${c.name}'s category weights add up to ${+tw.toFixed(2)}%, not 100%.`,short:`Weights add up to ${+tw.toFixed(2)}%, not 100%`}); }
+  return out;
+}
+const needsCheck=c=>setupWarnings(c).length>0;
 function warningsFor(c){
-  const out=[]; if(c.status) return out;
+  const out=setupWarnings(c); if(c.status) return out;
   const g=classGrade(c,false); if(g==null) return out;
   const L=letterFor(g), sc=sortedScale(), seen=(S.seen||{})[c.id];
   if(seen){const sl=S.scale.find(r=>r.l===seen); if(sl&&sl.gp>L.gp) out.push({c,kind:'drop',sev:'red',icon:ICON_DOWN,text:`${c.name} dropped from ${seen} to ${L.l}.`,short:`Dropped from ${seen} to ${L.l}`});}
@@ -642,6 +658,55 @@ function celebrate(ups,msg){
   requestAnimationFrame(step);
 }
 
+/* ---------- first-time tour ---------- */
+const TOUR=[
+  {view:'dash',sel:'.tiles',title:'Your dashboard',text:'Your GPA, your average and your number of graded assignments are up top. Problems with your classes show up below them, under Heads up.'},
+  {view:'home',sel:'#app button.row[data-act="open"]',alt:'#app [data-act="addClass"]',title:'Check each class',text:'Tap a class to add scores and see what you need on the final. Tap Edit on the class page to make its categories match the syllabus. Classes that still need this say "Check setup."'},
+  {view:'home',sel:'#app .wi',title:'Try a score with What-if',text:"Turn on What-if to try out scores you haven't gotten yet. They don't change your real grades."},
+  {view:'home',sel:'#tabs [data-act="settings"]',title:'Match your school',text:"In Settings, set your school's grade scale and whether it rounds. Then your letter grades will match your school's."}
+];
+let tourAt=-1;
+function maybeTour(){
+  if(tourAt>=0||!S||S.tourDone||ui.route.view!=='dash'||document.querySelector('.scrim')) return;
+  tourAt=0; setTimeout(()=>{ if(tourAt===0&&ui.route.view==='dash') showTour(); else tourAt=-1; },700);
+}
+function endTour(){
+  tourAt=-1; const el=document.getElementById('tour'); if(el) el.remove();
+  window.removeEventListener('resize',placeTour);
+  if(S&&!S.tourDone){ S.tourDone=1; save(); }
+}
+function showTour(){
+  const st=TOUR[tourAt]; if(!st){ endTour(); return; }
+  if(ui.route.view!==st.view){ ui.route={view:st.view}; ui.from=st.view; render(); }
+  let el=document.getElementById('tour');
+  if(!el){ el=document.createElement('div'); el.id='tour'; document.body.appendChild(el); window.addEventListener('resize',placeTour); }
+  const last=tourAt===TOUR.length-1;
+  el.innerHTML=`<div class="blk"></div><div class="spot"></div><div class="bub" role="dialog" aria-modal="true" aria-labelledby="tour-h"><small>Tip ${tourAt+1} of ${TOUR.length}</small><h3 id="tour-h">${st.title}</h3><p>${st.text}</p><div class="acts"><button class="addrow" data-tour="skip">${last?'':'Skip tour'}</button><button class="btn" data-tour="next" style="padding:9px 18px">${last?'Done':'Next'}</button></div></div>`;
+  const t=document.querySelector(st.sel)||(st.alt&&document.querySelector(st.alt));
+  if(t&&!t.closest('#tabs')) t.scrollIntoView({block:'center',behavior:reduced()?'auto':'smooth'});
+  setTimeout(placeTour,reduced()?0:350);
+  const nb=el.querySelector('[data-tour="next"]'); if(nb) nb.focus({preventScroll:true});
+}
+function placeTour(){
+  const el=document.getElementById('tour'), st=TOUR[tourAt]; if(!el||!st) return;
+  const t=document.querySelector(st.sel)||(st.alt&&document.querySelector(st.alt));
+  const spot=el.querySelector('.spot'), bub=el.querySelector('.bub'), W=innerWidth, H=innerHeight;
+  if(!t){ spot.style.cssText='left:50%;top:40%;width:0;height:0'; bub.style.left=Math.max(16,(W-bub.offsetWidth)/2)+'px'; bub.style.top=(H*0.3)+'px'; return; }
+  const r=t.getBoundingClientRect(), pad=6, top=Math.max(8,r.top-pad), bot=Math.min(H-8,r.bottom+pad);
+  Object.assign(spot.style,{left:(r.left-pad)+'px',top:top+'px',width:(r.width+pad*2)+'px',height:(bot-top)+'px'});
+  const bh=bub.offsetHeight, bw=bub.offsetWidth;
+  const y=bot+12+bh<H-16?bot+12:Math.max(16,top-12-bh);
+  bub.style.top=y+'px'; bub.style.left=Math.min(W-bw-16,Math.max(16,r.left+r.width/2-bw/2))+'px';
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-tour]'); if(!b) return;
+  e.stopPropagation();
+  if(b.dataset.tour==='skip'){ endTour(); render(); return; }
+  tourAt++; if(tourAt>=TOUR.length){ endTour(); ui.route={view:'dash'}; render(); return; }
+  showTour();
+},true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&tourAt>=0&&document.getElementById('tour')){ endTour(); render(); } });
+
 /* ---------- views ---------- */
 const app=document.getElementById('app');
 function wiSwitch(){return `<button class="wi glass" data-act="wi" aria-pressed="${ui.wi}">What-if<span class="sw ${ui.wi?'on':''}"></span></button>`;}
@@ -657,7 +722,7 @@ function homeView(){
   const rows=s.classes.map(c=>{
     const gr=classGrade(c,ui.wi); const L=gr==null?null:letterFor(gr);
     const right=c.status?`<span class="badge g-S">${c.status}</span>`:gr==null?`<span class="meta">No grades</span>`:`<span class="num meta">${f1(gr)}%</span>${letterBadge(c.id,L)}`;
-    return `<button class="row tap" data-act="open" data-id="${c.id}"><span class="dot" style="background:var(--c-${c.color})"></span><span class="main"><div class="t">${esc(c.name)}</div><div class="s">${+c.credits} credit${+c.credits===1?'':'s'} · ${c.mode==='points'?'Total points':'Weighted'}${c.status?' · not in GPA':''}</div></span><span class="r">${right}<span class="chev">›</span></span></button>`;
+    return `<button class="row tap" data-act="open" data-id="${c.id}"><span class="dot" style="background:var(--c-${c.color})"></span><span class="main"><div class="t">${esc(c.name)}</div><div class="s">${+c.credits} credit${+c.credits===1?'':'s'} · ${c.mode==='points'?'Total points':'Weighted'}${c.status?' · not in GPA':''}${needsCheck(c)?' · <span style="color:var(--orange);font-weight:600">Check setup</span>':''}</div></span><span class="r">${right}<span class="chev">›</span></span></button>`;
   }).join('');
   return `<header class="lt"><div class="lt-row"><div><div class="eyebrow">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div><h1>Grades</h1></div>${wiSwitch()}</div><div class="chips">${chips}</div>
    <label class="search" for="q">${ICON_Q}<input id="q" type="search" placeholder="Search assignments" value="${esc(ui.q||'')}" autocomplete="off" aria-label="Search assignments in every class and semester"></label></header>
@@ -665,7 +730,7 @@ function homeView(){
   <section class="glass sum"><div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--fill)" stroke-width="11"/><circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" ${ringAnim}/></svg><div class="v"><b class="num" ${g?`data-count="1" data-key="gpa" data-val="${g.gpa.toFixed(2)}" data-dec="2"`:''}>${g?g.gpa.toFixed(2):'–'}</b><span>GPA</span></div></div>
    <div class="stats"><div class="stat"><small>${esc(s.name)}</small><b class="num">${g?g.gpa.toFixed(2)+' GPA':'No graded classes'}</b></div><div class="stat"><small>Cumulative</small><b class="num">${cum?cum.gpa.toFixed(2):'–'}</b></div><div class="stat"><small>Credits in GPA</small><b class="num">${g?g.cr:0}</b></div></div></section>
   <section class="glass list"><button class="row tap" data-act="report"><span class="rc-ic">${ICON_DOC}</span><span class="main"><div class="t">Report card</div><div class="s">Save a one-page summary for parents or a counselor</div></span><span class="chev">›</span></button></section>
-  ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:''}</div>`).join('')}</div></section>`:''}
+  ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:w.kind==='setup'||w.kind==='weights'?`<button class="ack" data-act="editClass" data-id="${w.c.id}">Check</button>`:''}</div>`).join('')}</div></section>`:''}
   ${S.examples?`<section class="glass banner"><span><b>These are example classes.</b> Explore, then remove them and add your own.</span><button class="btn ghost" data-act="clearEx">Remove examples</button></section>`:''}
   <section><div class="sec-h"><span>Classes</span>${ui.wi?'<span style="color:var(--accent)">Showing what-if</span>':''}</div>
    <div class="glass list">${rows||`<div class="empty"><div>No classes in ${esc(s.name)} yet.</div></div>`}<button class="row tap addrow" data-act="addClass">+ Add class</button></div></section>`;
@@ -688,8 +753,8 @@ function classView(c){
   <section class="glass hero"><div class="meta"><span class="dot" style="display:inline-block;background:var(--c-${c.color});margin-right:6px"></span>${esc(c.name)}</div>
    <div class="hero-top"><div class="big num">${gr==null?'–':`<span data-count="1" data-key="c-${c.id}" data-val="${f1(gr)}" data-dec="1">${f1(gr)}</span>`}<small>%</small></div>${c.status?`<span class="badge g-S">${c.status}</span>`:L?letterBadge('h'+c.id,L):''}</div>
    <div class="bar"><i style="width:${gr==null?0:Math.min(100,gr)}%;background:var(--c-${c.color})"></i></div>
-   <div class="meta">${c.status?esc(STATUSES[c.status])+' · not counted in GPA':(L?`${L.gp.toFixed(1)} grade points · ${+c.credits} credit${+c.credits===1?'':'s'}`:'Add a score to see your grade')}${ui.wi&&act!=null&&Math.abs(act-gr)>0.005?` · actual ${f1(act)}%`:''}${c.mode!=='points'&&tw!==100?` · weights add to ${tw}%`:''}</div>
-   ${cw.map(w=>`<div class="hero-warn ${w.sev}">${w.kind==='drop'?'↓':'⚠︎'} ${esc(w.short)}${w.kind==='drop'?` <button class="ack" data-act="ackDrop" data-id="${c.id}" style="margin-left:auto">Got it</button>`:''}</div>`).join('')}
+   <div class="meta">${c.status?esc(STATUSES[c.status])+' · not counted in GPA':(L?`${L.gp.toFixed(1)} grade points · ${+c.credits} credit${+c.credits===1?'':'s'}`:'Add a score to see your grade')}${ui.wi&&act!=null&&Math.abs(act-gr)>0.005?` · actual ${f1(act)}%`:''}</div>
+   ${cw.map(w=>`<div class="hero-warn ${w.sev}">${w.kind==='drop'?'↓':'⚠︎'} ${esc(w.short)}${w.kind==='drop'?` <button class="ack" data-act="ackDrop" data-id="${c.id}" style="margin-left:auto">Got it</button>`:w.kind==='setup'||w.kind==='weights'?` <button class="ack" data-act="editClass" data-id="${c.id}" style="margin-left:auto">Check</button>`:''}</div>`).join('')}
    <div>${wiSwitch()}</div></section>
   ${calcView(c)}
   ${cats}
@@ -737,9 +802,15 @@ function setupView(){
   const st=ui.setup, ph=['Biology','English','Math','History','Spanish','Art'];
   return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Welcome to Grade Book</div><h1>Set up your classes</h1></div></header>
   ${ui.bootErr?`<p class="note">${esc(ui.bootErr)}</p>`:''}
+  <section><div class="sec-h"><span>Before you start, have these ready</span></div><div class="glass list">
+   <div class="row"><span class="rc-ic">1</span><span class="main"><div class="t">Each class's syllabus</div><div class="s">It lists the grading categories and how much each one counts, like "Tests 40%, Homework 20%." Some teachers use total points instead.</div></span></div>
+   <div class="row"><span class="rc-ic">2</span><span class="main"><div class="t">Your school's grade scale</div><div class="s">For example, 93% and up is an A. You can change the scale later in Settings.</div></span></div>
+   <div class="row"><span class="rc-ic">3</span><span class="main"><div class="t">Your scores so far</div><div class="s">From your school's grade portal or your graded work.</div></span></div>
+  </div></section>
+  <p class="note" style="padding:0 16px;margin-top:-12px">Grade Book is only as accurate as what you put in. If your categories or grade scale don't match your school's, your grades won't match either.</p>
   ${ui.acct&&ui.acct.name?'':`<section class="glass list"><div class="fr"><label for="su-n">Name</label><input id="su-n" data-su="name" value="${esc(st.name)}" placeholder="Your name" autocomplete="name"></div></section>`}
   <section><div class="sec-h"><span>Your classes</span></div><div class="glass list">${st.classes.map((n,i)=>`<div class="fr"><input data-su="c" data-i="${i}" value="${esc(n)}" placeholder="${ph[i%ph.length]}" aria-label="Class ${i+1} name" style="text-align:left"><button type="button" data-act="suRm" data-i="${i}" aria-label="Remove class ${i+1}" style="color:var(--red);font-size:20px;width:26px">⊖</button></div>`).join('')}<button class="row tap addrow" data-act="suAdd">+ Add another class</button></div></section>
-  <p class="note" style="padding:0 16px;margin-top:-12px">Each class starts with Homework, Quizzes, Tests and Final exam categories. You can change them anytime with Edit on the class page.</p>
+  <p class="note" style="padding:0 16px;margin-top:-12px">Each class starts with sample categories: Homework, Quizzes, Tests and Final exam. Grade Book will remind you to change them to match each syllabus.</p>
   <div id="su-msg" class="note" role="alert" style="color:var(--red)"></div>
   <button class="btn block" data-act="suDone">Start</button>
   <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button class="btn ghost" data-act="suEx">Try example classes</button><button class="btn ghost" data-act="suImp">Import a backup file</button><input type="file" id="imp" accept=".json,application/json" hidden></div>
@@ -822,6 +893,7 @@ function render(){
   const rk=ui.route.view+(ui.route.id||'');
   if(rk!==ui.lastRoute&&!reduced()){app.classList.remove('enter');void app.offsetWidth;app.classList.add('enter');} else if(rk===ui.lastRoute) app.classList.remove('enter');
   ui.lastRoute=rk; countUp(); if(ui.route.view==='dash') wireChart();
+  if(tourAt>=0&&document.getElementById('tour')) requestAnimationFrame(placeTour); else maybeTour();
   const tv=ui.route.view==='class'?ui.from:ui.route.view;
   document.getElementById('tabs').innerHTML=`<button class="tab ${tv==='dash'?'on':''}" data-act="dash">${ICON_D}Dashboard</button><button class="tab ${tv==='home'?'on':''}" data-act="home">${ICON_G}Grades</button><button class="tab ${tv==='settings'?'on':''}" data-act="settings">${ICON_S}Settings</button>`;
 }
@@ -935,7 +1007,7 @@ function dashView(){
    <div class="tile glass"><small>Average</small><b class="num">${aNow!=null?`<span data-count="1" data-key="davg" data-val="${f1(aNow)}" data-dec="1">${f1(aNow)}</span>%`:'–'}</b>${delta(aNow,aWk,1,'')}${aWk!=null&&aNow!=null?` since ${shortDate(wk)}</span>`:''}</div>
    <div class="tile glass"><small>Graded</small><b class="num">${items.length}</b><span class="d">${recentN} since ${shortDate(wk)}</span></div></section>
   ${ui.pay&&(ui.pay.state==='trial'||ui.pay.state==='cancelled')?`<section class="glass list">${trialRow(true)}</section>`:''}
-  ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:''}</div>`).join('')}</div></section>`:''}
+  ${warns.length?`<section><div class="sec-h"><span>Heads up</span><span>${warns.length}</span></div><div class="glass list warn">${warns.map(w=>`<div class="row"><span class="ic ${w.sev}">${w.icon}</span><button class="main tap" data-act="open" data-id="${w.c.id}" style="text-align:left"><div class="t">${esc(w.text)}</div></button>${w.kind==='drop'?`<button class="ack" data-act="ackDrop" data-id="${w.c.id}">Got it</button>`:w.kind==='setup'||w.kind==='weights'?`<button class="ack" data-act="editClass" data-id="${w.c.id}">Check</button>`:''}</div>`).join('')}</div></section>`:''}
   ${progressCard(s)}
   <section class="glass card"><div class="ch-head"><h2>Grade history</h2><div class="seg small">${[['1m','1M'],['3m','3M'],['sem','Semester']].map(([v,l])=>`<button data-act="range" data-v="${v}" class="${ui.range===v?'on':''}">${l}</button>`).join('')}</div></div>
    ${m.series.length?`<div class="legend">${m.series.map(x=>`<button class="lg ${ui.focus&&ui.focus!==x.c.id?'dim':''}" data-act="focus" data-id="${x.c.id}" aria-pressed="${ui.focus===x.c.id}"><i style="background:${x.col}"></i>${esc(x.c.name)}</button>`).join('')}</div>
@@ -1034,7 +1106,9 @@ function classSheet(c){
     categories:defaultCats()};
   let cats=c.categories.map(k=>({...k})); let color=c.color;
   const catRows=()=>cats.map((k,i)=>`<div class="fr" data-ci="${i}"><input aria-label="Category name" data-cf="name" value="${esc(k.name)}" placeholder="Category"><input class="w num" inputmode="decimal" aria-label="Weight percent" data-cf="weight" value="${k.weight}" ${segVal('mode')==='points'?'hidden':''}><span class="meta" ${segVal('mode')==='points'?'hidden':''}>%</span>${segVal('mode')==='points'?`<input class="d num" inputmode="decimal" aria-label="Fewest points" data-cf="minPts" value="${k.minPts??''}" placeholder="min"><span class="meta">–</span><input class="d num" inputmode="decimal" aria-label="Most points" data-cf="maxPts" value="${k.maxPts??''}" placeholder="max">`:''}<button type="button" class="x" data-act="rmCat" data-i="${i}" aria-label="Remove category">⊖</button></div>`).join('');
+  const sample=isNew||c.catsChecked===false;
   openSheet(isNew?'New class':'Edit class',`
+   ${sample?`<p class="hint" style="margin:0;color:var(--orange);font-weight:600">The categories below are samples. Change them to match this class's syllabus, then tap ${isNew?'Add':'Save'}.</p>`:''}
    <div class="fl"><div class="fr"><label for="c-n">Name</label><input id="c-n" value="${esc(c.name)}" placeholder="Chemistry"></div>
     <div class="fr"><label for="c-cr">Credits</label><input id="c-cr" class="num" inputmode="decimal" value="${c.credits}"></div>
     <div class="fr"><label>Color</label><div class="colors" id="c-col">${COLORS.map(k=>`<button type="button" data-col="${k}" aria-label="${k}" class="${k===color?'on':''}" style="background:var(--c-${k})"></button>`).join('')}</div></div>
@@ -1042,17 +1116,17 @@ function classSheet(c){
    <div class="fl"><div class="fr">${segHtml('mode',[['weighted','Weighted %'],['points','Total points']],c.mode)}</div></div>
    <div><div class="sec-h"><span>Categories</span><span id="c-tot"></span></div>
     <div class="fl cats" id="c-cats"></div>
-    <p class="hint" style="margin-top:8px">Weighted classes: weight is the category's % of your grade. Total points classes: points each is the usual range, like 1–5 for homework. <button type="button" class="addrow" data-act="addCat">+ Add category</button></p></div>
+    <p class="hint" style="margin-top:8px">Weighted classes: weight is the category's % of your grade. Total points classes: points each is the usual range, like 1–5 for homework.</p></div>
    ${isNew?'':delBtn('Delete class')}`,()=>{
     readCats();
     if(!cats.length) return 'Add at least one category.';
     c.name=val('c-n')||'Untitled class'; c.credits=isNum(val('c-cr'))?+val('c-cr'):1; c.color=color; c.status=val('c-st'); c.mode=segVal('mode')||'weighted';
     c.categories=cats.map(k=>({...k,name:k.name||'Category',weight:+k.weight||0,minPts:isNum(k.minPts)?+k.minPts:'',maxPts:isNum(k.maxPts)?+k.maxPts:'',items:k.items||[]}));
-    c.example=false;
+    c.example=false; c.catsChecked=true;
     if(isNew){sem().classes.push(c); ui.route={view:'class',id:c.id};}
   },isNew?'Add':'Save');
   function readCats(){root.querySelectorAll('[data-ci]').forEach(row=>{const k=cats[+row.dataset.ci];row.querySelectorAll('[data-cf]').forEach(inp=>k[inp.dataset.cf]=inp.value);});}
-  function drawCats(){const pts=segVal('mode')==='points';document.getElementById('c-cats').innerHTML=(cats.length?`<div class="fr" style="font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em;min-height:0;padding-block:8px"><span style="flex:1">Category</span>${pts?'<span style="width:110px;text-align:right">Points each</span>':'<span style="width:84px;text-align:right">Weight</span>'}<span style="width:26px"></span></div>`:'')+(catRows()||'<div class="fr meta">No categories</div>');tot();}
+  function drawCats(){const pts=segVal('mode')==='points';document.getElementById('c-cats').innerHTML=(cats.length?`<div class="fr" style="font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em;min-height:0;padding-block:8px"><span style="flex:1">Category</span>${pts?'<span style="width:110px;text-align:right">Points each</span>':'<span style="width:84px;text-align:right">Weight</span>'}<span style="width:26px"></span></div>`:'')+(catRows()||'<div class="fr meta">No categories yet. Add one for each part of your grade on the syllabus.</div>')+'<button type="button" class="row tap addrow" data-act="addCat" style="width:100%;padding:13px 14px;text-align:left;font-weight:600">+ Add category</button>';tot();}
   function tot(){const el=document.getElementById('c-tot');if(segVal('mode')==='points'){el.textContent='';return;}readCats();const t=cats.reduce((a,k)=>a+(+k.weight||0),0);el.textContent='Total '+t+'%';el.style.color=t===100?'var(--green)':'var(--orange)';}
   drawCats();
   classSheetApi={readCats,drawCats,tot,addCat(){readCats();cats.push({id:uid(),name:'',weight:0,items:[]});drawCats();},rmCat(i){readCats();cats.splice(i,1);drawCats();},setColor(k){color=k;}};

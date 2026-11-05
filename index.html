@@ -133,6 +133,19 @@ h1{font-family:var(--font-d);font-size:34px;line-height:1.1;font-weight:700;lett
 /* Tab bar */
 .tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;gap:4px;padding:6px;border-radius:999px}
 .tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 14px;border-radius:999px;font-size:11px;font-weight:600;color:var(--fg2)}
+.fcards{display:grid;gap:12px}
+.fcard{border-radius:22px;padding:16px;display:grid;gap:14px}
+.ftop{display:flex;align-items:center;gap:12px}
+.fav{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:18px;flex:none;letter-spacing:.02em}
+.fwho{flex:1;min-width:0}.fwho .t{font-size:18px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fwho .s{font-size:13px;color:var(--fg2)}
+.fgpa{position:relative;width:64px;height:64px;flex:none}.fgpa svg{width:64px;height:64px}
+.fgpa div{position:absolute;inset:0;display:grid;place-content:center;text-align:center;line-height:1}.fgpa b{font-size:17px;font-weight:800;letter-spacing:-.02em}.fgpa small{font-size:10px;font-weight:600;color:var(--fg2);margin-top:2px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.fchip{display:flex;align-items:center;gap:8px;justify-content:space-between;background:var(--glass-hi);border:1px solid var(--stroke);border-radius:14px;padding:8px 8px 8px 12px;min-width:0}
+.fchip .nm{font-size:14px;font-weight:500;line-height:1.25;min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fchip .badge{min-width:36px;font-size:14px;padding:3px 6px;flex:none}
+.ffoot{display:flex;align-items:center;justify-content:space-between;gap:10px}.ffoot .s{font-size:13px;color:var(--fg2)}
+.frm{font-size:13px;color:var(--fg3);font-weight:500}.frm.armed{color:var(--red);font-weight:600}
 .tab-dot{position:absolute;top:2px;right:8px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;line-height:17px;text-align:center}
 .tab svg{width:24px;height:24px}
 .tab.on{color:var(--accent);background:var(--fill)}
@@ -749,12 +762,20 @@ function friendsView(){
   ${inc.length?`<section><div class="sec-h"><span>Friend requests</span><span>${inc.length}</span></div><div class="glass list">${inc.map(f=>`<div class="row"><span class="main">${who(f)}</span><button class="ack" data-act="frAccept" data-id="${f.id}">Accept</button><button class="ack" data-act="frDecline" data-id="${f.id}" style="color:var(--fg2)">Decline</button></div>`).join('')}</div></section>`:''}
   ${F.high_fives.length?`<section><div class="sec-h"><span>High fives for you</span></div><div class="glass list">${F.high_fives.map(h=>`<div class="row"><span class="main"><div class="t">🙌 ${esc(h.name)} high-fived you</div><div class="s">${esc(h.class)} went up to ${esc(h.letter)} · ${ago(h.at)}</div></span></div>`).join('')}</div></section>`:''}
   ${F.events.length?`<section><div class="sec-h"><span>Friends' news</span></div><div class="glass list">${F.events.map(e=>`<div class="row"><span class="main"><div class="t">${esc(e.name)}'s ${esc(e.class)} went up to ${esc(e.letter)}</div><div class="s">${ago(e.at)}</div></span>${e.mine?`<span class="meta">🙌 Sent</span>`:`<button class="ack" data-act="hi5" data-id="${e.id}">🙌 High five</button>`}</div>`).join('')}</div></section>`:''}
-  <section><div class="sec-h"><span>Your friends</span>${friends.length?`<span>${friends.length}</span>`:''}</div><div class="glass list">${L==null?`<div class="empty"><span class="spin"></span></div>`:friends.length?friends.map(f=>{
-    const cls=Array.isArray(f.classes)?f.classes:[];
-    const right=f.gpa!=null?`<span class="num" style="font-weight:700">${(+f.gpa).toFixed(2)}</span><span class="meta" style="margin-left:4px">GPA</span>`:'';
-    return `<div class="row" style="align-items:flex-start"><span class="main">${who(f)}${f.share==='none'||f.share==null?`<div class="s" style="margin-top:4px">Not sharing grades</div>`:''}${cls.length?`<div class="s" style="margin-top:4px">${cls.map(c=>`${esc(c.name)}: <b>${esc(c.letter)}</b>`).join(' · ')}</div>`:''}</span><span class="r" style="flex-direction:column;align-items:flex-end;gap:6px"><span>${right}</span><button class="ack" data-act="frRemove" data-id="${f.id}" data-confirm style="color:var(--fg2)">Remove</button></span></div>`;}).join(''):`<div class="row"><span class="main"><div class="s">No friends yet. Ask a friend for their username, or tell them yours: @${esc(ui.prof.username)}</div></span></div>`}</div></section>
+  <section><div class="sec-h"><span>Your friends</span>${friends.length?`<span>${friends.length}</span>`:''}</div>${L==null?`<div class="glass list"><div class="empty"><span class="spin"></span></div></div>`:friends.length?`<div class="fcards">${friends.map(friendCard).join('')}</div>`:`<div class="glass list"><div class="row"><span class="main"><div class="s">No friends yet. Ask a friend for their username, or tell them yours: @${esc(ui.prof.username)}</div></span></div></div>`}</section>
   ${out.length?`<section><div class="sec-h"><span>Requests you sent</span></div><div class="glass list">${out.map(f=>`<div class="row"><span class="main">${who(f)}<div class="s">Waiting for them to accept</div></span><button class="ack" data-act="frCancel" data-id="${f.id}" style="color:var(--fg2)">Cancel</button></div>`).join('')}</div></section>`:''}
   <section><div class="sec-h"><span>What friends can see</span></div><div class="glass list"><div class="fr"><div class="seg">${shareOpts.map(([v,l])=>`<button type="button" class="${ui.prof.share===v?'on':''}" data-act="share" data-v="${v}" aria-pressed="${ui.prof.share===v}">${l}</button>`).join('')}</div></div><div class="row"><span class="main"><div class="s">${shareText}</div></span></div></div></section>`;
+}
+function friendCard(f){
+  const cls=Array.isArray(f.classes)?f.classes:[], u=String(f.username||''), nm=f.name||'@'+u;
+  let h=0; for(const ch of u) h=(h*31+ch.charCodeAt(0))>>>0;
+  const col=COLORS[h%COLORS.length], ini=nm.replace(/^@/,'').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+  const g=f.gpa!=null?+f.gpa:null, C=2*Math.PI*22, frac=g==null?0:Math.min(1,g/4);
+  const gpa=g==null?'':`<div class="fgpa"><svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="var(--fill)" stroke-width="5"/><circle cx="26" cy="26" r="22" fill="none" stroke="var(--c-${col})" stroke-width="5" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 26 26)"/></svg><div><b class="num">${g.toFixed(2)}</b><small>GPA</small></div></div>`;
+  const note=f.share==='gpa'?'Sharing GPA only':(f.share==='none'||f.share==null)?'Not sharing grades':cls.length?'':'No grades yet this semester';
+  return `<div class="fcard glass"><div class="ftop"><span class="fav" style="background:var(--c-${col})" aria-hidden="true">${esc(ini)}</span><div class="fwho"><div class="t">${esc(nm)}</div><div class="s">@${esc(u)}</div></div>${gpa}</div>
+   ${cls.length?`<div class="fgrid">${cls.map(c=>`<div class="fchip"><span class="nm">${esc(c.name)}</span><span class="badge ${gcls(c.letter)}">${esc(c.letter)}</span></div>`).join('')}</div>`:''}
+   <div class="ffoot"><span class="s">${note}</span><button class="frm" data-act="frRemove" data-id="${f.id}" data-confirm>Remove friend</button></div></div>`;
 }
 function renderTabs(){
   const el=document.getElementById('tabs'); if(!el||el.hidden) return;

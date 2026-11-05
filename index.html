@@ -132,7 +132,8 @@ h1{font-family:var(--font-d);font-size:34px;line-height:1.1;font-weight:700;lett
 
 /* Tab bar */
 .tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;gap:4px;padding:6px;border-radius:999px}
-.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 22px;border-radius:999px;font-size:11px;font-weight:600;color:var(--fg2)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 14px;border-radius:999px;font-size:11px;font-weight:600;color:var(--fg2)}
+.tab-dot{position:absolute;top:2px;right:8px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;line-height:17px;text-align:center}
 .tab svg{width:24px;height:24px}
 .tab.on{color:var(--accent);background:var(--fill)}
 
@@ -336,7 +337,7 @@ function sample(){
 function fresh(){const sem=sample();return {v:1,updatedAt:0,name:'',curSem:sem.id,semesters:[sem],scale:DEFAULT_SCALE.map(r=>({...r})),round:false,examples:true};}
 
 let S=null, lkey=KEY+'.local';
-const ui={route:{view:'loading'},wi:false,sync:'device',msg:'',range:'sem',focus:null,from:'dash',auth:{mode:'in',msg:'',email:''},acct:null,setup:null,carry:null,pay:null,payMsg:'',checking:false};
+const ui={route:{view:'loading'},wi:false,sync:'device',msg:'',range:'sem',focus:null,from:'dash',auth:{mode:'in',msg:'',email:''},acct:null,setup:null,carry:null,pay:null,payMsg:'',checking:false,prof:null,fr:{list:null,feed:null,msg:''}};
 function loadLocal(k){lkey=k; S=null; try{const raw=localStorage.getItem(k); if(raw) S=JSON.parse(raw);}catch(e){} if(S&&!Array.isArray(S.semesters)) S=null;}
 const firstName=()=>String((S&&S.name)||'').trim().split(/\s+/)[0]||'';
 const defaultCats=()=>[['Homework',20],['Quizzes',20],['Tests',35],['Final exam',25]].map(([name,weight])=>({id:uid(),name,weight,items:[]}));
@@ -354,7 +355,7 @@ function save(){
   if(!S) return;
   S.updatedAt=Date.now();
   try{localStorage.setItem(lkey,JSON.stringify(S));}catch(e){}
-  if(ref){clearTimeout(writeTimer);writeTimer=setTimeout(flush,700);}
+  if(ref){clearTimeout(writeTimer);writeTimer=setTimeout(flush,700); if(ui.prof&&ui.prof.share!=='none') publishShare();}
 }
 async function flush(){
   if(!ref||!S) return;
@@ -471,6 +472,7 @@ async function onUser(u){
   }catch(e){ ref=r; ui.sync='error'; }
   ui.carry=null;
   ui.pay=null; try{ await loadAccess(u); }catch(e){}
+  ui.prof=null; ui.fr={list:null,feed:null}; loadProfile();
   afterLoad();
   if(/[?&]paid=/.test(location.search)){ history.replaceState(null,'',location.pathname); if(locked()) payCheck(false); }
 }
@@ -479,6 +481,7 @@ document.addEventListener('visibilitychange',async()=>{
   if(document.visibilityState!=='visible'||!sb||!curUid||!ref||writing) return;
   if(ui.pay&&ui.pay.state!=='free'&&ui.pay.state!=='paid'&&!ui.checking){ try{ const u=(await sb.auth.getUser()).data.user; if(u){ const prev=ui.pay.state; await loadAccess(u); if(prev!==ui.pay.state){ const was=ui.route.view==='paywall'; afterLoad(); if(was&&hasAccess()) unlocked(prev); return; } } }catch(e){} }
   try{ const x=await pull(); if(remoteNewer(x)){ takeRemote(x); if(isGate(ui.route.view)) afterLoad(); else if(!document.querySelector('.scrim')) render(); } }catch(e){}
+  if(ui.prof&&ui.prof.username) loadFriends();
 });
 function authMsg(t,ok){ ui.auth.msg=t; ui.auth.ok=!!ok; const el=document.getElementById('au-msg'); if(el){el.textContent=t; el.style.color=ok?'var(--green)':'var(--red)';} }
 function authErr(e){
@@ -491,13 +494,14 @@ function authErr(e){
   if(c==='same_password') return 'Pick a password different from your old one.';
   if(c==='over_email_send_rate_limit'||c==='over_request_rate_limit'||e&&e.status===429) return 'Too many tries. Wait a few minutes, then try again.';
   if(c==='signup_disabled') return 'New accounts are turned off for Grade Book right now.';
+  if(m.includes('database error saving new user')) return 'That username was just taken. Pick another one.';
   if(m.includes('failed to fetch')||m.includes('network')) return 'No internet connection. Try again when you are online.';
   return 'Sign-in did not work'+(e&&e.message?': '+e.message:'.');
 }
 async function authSubmit(){
   if(!sb) return;
-  const m=ui.auth.mode, email=val('au-e'), pwEl=document.getElementById('au-p'), pw=pwEl?pwEl.value:'', name=val('au-n');
-  if(m==='up'){ ui.auth.name=name; if(!name){authMsg('Enter your name.');return;} }
+  const m=ui.auth.mode, email=val('au-e'), pwEl=document.getElementById('au-p'), pw=pwEl?pwEl.value:'', name=val('au-n'), username=val('au-u').toLowerCase();
+  if(m==='up'){ ui.auth.name=name; ui.auth.username=username; if(!name){authMsg('Enter your name.');return;} const ue=usernameProblem(username); if(ue){authMsg(ue);return;} }
   if(m!=='newpw'){ ui.auth.email=email; if(!email){authMsg('Enter your email.');return;} }
   if(m!=='reset'&&!pw){authMsg(m==='newpw'?'Enter a new password.':'Enter your password.');return;}
   if((m==='up'||m==='newpw')&&pw.length<6){authMsg('Passwords need at least 6 characters.');return;}
@@ -511,7 +515,9 @@ async function authSubmit(){
       const {data}=await sb.auth.getSession(); history.replaceState(null,'',location.pathname);
       ui.auth={mode:'in',msg:'',email:''}; onUser(data&&data.session?data.session.user:null);
     } else if(m==='up'){
-      const {data,error}=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:APP_URL,data:{name}}}); if(error) throw error;
+      const av=await sb.rpc('username_available',{p_username:username}); if(av.error) throw av.error;
+      if(!av.data){ authMsg('That username is taken. Try another one.'); const b=document.querySelector('[data-act="auGo"]'); if(b) b.disabled=false; return; }
+      const {data,error}=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:APP_URL,data:{name,username}}}); if(error) throw error;
       if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length) throw {code:'user_already_exists'};
       if(!data.session){ ui.auth={mode:'in',email,msg:'Almost done. Open the link we emailed to '+email+' to confirm your account, then sign in here.',ok:true}; render(); }
     } else {
@@ -523,7 +529,7 @@ async function authSubmit(){
 async function saveName(){
   const name=val('acct-n'), msg=t=>{const el=document.getElementById('acct-msg'); if(el) el.textContent=t;};
   if(!name){msg('Enter your name.');return;}
-  try{ const {error}=await sb.auth.updateUser({data:{name}}); if(error) throw error; ui.acct.name=name; S.name=name; save(); render(); }
+  try{ const {error}=await sb.auth.updateUser({data:{name}}); if(error) throw error; ui.acct.name=name; S.name=name; save(); syncProfileName(); render(); }
   catch(e){ msg('Could not save your name. Check your connection and try again.'); }
 }
 async function signOutNow(){
@@ -620,7 +626,7 @@ function syncSeen(party){
     if(pl&&L.gp>pl.gp&&!c.example) ups.push({c,L});
     if(!pl||L.gp>=pl.gp){ if(prev!==L.l){S.seen[c.id]=L.l; ch=true;} }
   }));
-  if(party&&ups.length) celebrate(ups);
+  if(party&&ups.length){ celebrate(ups); sendGradeUps(ups); }
   return ch;
 }
 function toast(t){ const el=document.createElement('div'); el.className='toast'; el.setAttribute('role','status'); el.textContent=t; document.body.appendChild(el); setTimeout(()=>el.remove(),3300); }
@@ -642,6 +648,118 @@ function celebrate(ups,msg){
     if(alive&&t<END&&cv.isConnected) requestAnimationFrame(step); else cv.remove();
   };
   requestAnimationFrame(step);
+}
+
+/* ---------- friends ---------- */
+const USERNAME_RE=/^[a-z0-9_]{3,20}$/;
+function usernameProblem(u){
+  if(!u) return 'Pick a username.';
+  if(u.length<3) return 'Usernames need at least 3 characters.';
+  if(u.length>20) return 'Usernames can be at most 20 characters.';
+  if(!USERNAME_RE.test(u)) return 'Usernames can only use lowercase letters, numbers and _.';
+  return '';
+}
+const shortName=n=>{const p=String(n||'').trim().split(/\s+/).filter(Boolean); return !p.length?'':p.length===1?p[0]:p[0]+' '+p[p.length-1][0].toUpperCase()+'.';};
+async function loadProfile(){
+  if(!sb||!curUid) return;
+  try{
+    const {data}=await sb.from('profiles').select('username,display_name,share').eq('user_id',curUid).maybeSingle();
+    ui.prof=data||{username:null,display_name:'',share:'none'};
+    if(ui.acct&&ui.acct.name&&ui.prof.display_name!==shortName(ui.acct.name)) syncProfileName();
+    if(ui.prof.share!=='none') publishShare(true);
+    loadFriends();
+  }catch(e){ ui.prof=ui.prof||null; }
+  if(ui.route.view==='friends') render();
+}
+async function syncProfileName(){
+  if(!sb||!curUid||!ui.acct) return; const dn=shortName(ui.acct.name);
+  try{ await sb.from('profiles').update({display_name:dn}).eq('user_id',curUid); if(ui.prof) ui.prof.display_name=dn; }catch(e){}
+}
+async function loadFriends(){
+  if(!sb||!curUid||!ui.prof||!ui.prof.username) return;
+  try{
+    const [a,b]=await Promise.all([sb.rpc('get_friends'),sb.rpc('get_feed')]);
+    if(!a.error) ui.fr.list=a.data||[];
+    if(!b.error) ui.fr.feed=b.data||{events:[],high_fives:[]};
+  }catch(e){}
+  if(ui.route.view==='friends'&&!document.querySelector('.scrim')) render(); else renderTabs();
+}
+let pubTimer=null, pubKey='';
+function sharePayload(){
+  const s=sem(), g=gpaOf(s.classes,false);
+  const classes=s.classes.filter(c=>!c.example&&!c.status).map(c=>{const gr=classGrade(c,false); return gr==null?null:{name:String(c.name).slice(0,60),letter:letterFor(gr).l};}).filter(Boolean);
+  return {gpa:g?Math.round(g.gpa*100)/100:null,classes};
+}
+function publishShare(now){
+  clearTimeout(pubTimer);
+  if(!sb||!curUid||!ui.prof||ui.prof.share==='none'||!S) return;
+  pubTimer=setTimeout(async()=>{
+    const p=sharePayload(), k=JSON.stringify(p); if(k===pubKey) return;
+    const {error}=await sb.from('shared_stats').upsert({user_id:curUid,gpa:p.gpa,classes:p.classes,updated_at:new Date().toISOString()});
+    if(!error) pubKey=k;
+  },now?0:1500);
+}
+async function setShare(v){
+  if(!ui.prof||!['none','gpa','letters'].includes(v)) return;
+  const prev=ui.prof.share; ui.prof.share=v; ui.fr.msg=''; render();
+  const {error}=await sb.from('profiles').update({share:v}).eq('user_id',curUid);
+  if(error){ ui.prof.share=prev; ui.fr.msg="Couldn't save that. Check your connection and try again."; render(); return; }
+  if(v==='none'){ pubKey=''; await sb.from('shared_stats').delete().eq('user_id',curUid); }
+  else { pubKey=''; publishShare(true); }
+}
+async function saveUsername(){
+  const u=val('un-new').toLowerCase(), msg=t=>{ui.fr.msg=t; const el=document.getElementById('fr-msg'); if(el) el.textContent=t;};
+  const p=usernameProblem(u); if(p){ msg(p); return; }
+  const {data,error}=await sb.rpc('set_username',{p_username:u});
+  if(error){ msg("Couldn't save your username. Check your connection and try again."); return; }
+  if(data==='taken'){ msg('That username is taken. Try another one.'); return; }
+  if(data!=='ok'&&data!=='already_set'){ msg("That username won't work. Use 3 to 20 lowercase letters, numbers or _."); return; }
+  ui.fr.msg=''; await loadProfile(); render();
+}
+async function addFriend(){
+  const u=val('fr-u').toLowerCase().replace(/^@/,''), msg=t=>{ui.fr.msg=t; const el=document.getElementById('fr-msg'); if(el) el.textContent=t;};
+  if(!u){ msg("Type your friend's username."); return; }
+  const {data,error}=await sb.rpc('send_friend_request',{p_username:u});
+  if(error){ msg("Couldn't send that. Check your connection and try again."); return; }
+  const t={sent:`Request sent to @${u}. They'll see it in their Friends tab.`,accepted:`You and @${u} are now friends.`,not_found:`There's no one with the username @${u}.`,self:"That's your own username.",already_friends:`You're already friends with @${u}.`,already_sent:`You already sent @${u} a request.`}[data]||"Couldn't send that. Try again.";
+  ui.fr.msg=t; ui.fr.ok=data==='sent'||data==='accepted'; await loadFriends(); render();
+}
+async function friendAct(fn,args,okMsg){ const {error}=await sb.rpc(fn,args); ui.fr.msg=error?"That didn't work. Check your connection and try again.":(okMsg||''); ui.fr.ok=!error; await loadFriends(); render(); }
+function sendGradeUps(ups){
+  if(!sb||!curUid||!ui.prof||ui.prof.share!=='letters') return;
+  ups.forEach(u=>{ sb.rpc('record_grade_up',{p_class:String(u.c.name).slice(0,60),p_letter:u.L.l}).then(()=>{},()=>{}); });
+}
+const ago=iso=>{const s=(Date.now()-Date.parse(iso))/1000; return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':s<86400?Math.floor(s/3600)+'h ago':Math.floor(s/86400)+'d ago';};
+const incomingCount=()=>((ui.fr&&ui.fr.list)||[]).filter(f=>f.status==='pending'&&f.incoming).length;
+function friendsView(){
+  const head=`<header class="lt"><div><div class="eyebrow">${ui.prof&&ui.prof.username?'You are @'+esc(ui.prof.username):'Grade Book'}</div><h1>Friends</h1></div></header>`;
+  const msg=`<p id="fr-msg" class="note" role="status" style="min-height:1.2em;margin:-8px 4px 0;color:${ui.fr.ok?'var(--green)':'var(--orange)'}">${esc(ui.fr.msg||'')}</p>`;
+  if(!ui.acct) return head+`<p class="note">Sign in to add friends.</p>`;
+  if(!ui.prof) return head+`<div class="empty"><span class="spin"></span></div>`;
+  if(!ui.prof.username) return head+`<section class="glass list"><div class="row"><span class="main"><div class="t">Pick a username</div><div class="s">Friends add you by your username. Use 3 to 20 lowercase letters, numbers or _. You can't change it later.</div></span></div>
+    <form id="un-f" class="fr" novalidate><input id="un-new" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" placeholder="sam_lee" style="text-align:left" aria-label="Username"><button class="ack" data-act="setUser">Save</button></form></section>${msg}`;
+  const L=ui.fr.list, F=ui.fr.feed||{events:[],high_fives:[]};
+  const friends=(L||[]).filter(f=>f.status==='accepted'), inc=(L||[]).filter(f=>f.status==='pending'&&f.incoming), out=(L||[]).filter(f=>f.status==='pending'&&!f.incoming);
+  const who=f=>`<div class="t">${esc(f.name||'@'+f.username)}</div><div class="s">@${esc(f.username||'')}</div>`;
+  const shareOpts=[['none','Nothing'],['gpa','GPA only'],['letters','GPA + letters']];
+  const shareText={none:"Friends can't see any of your grades.",gpa:'Friends can see your GPA for this semester.',letters:"Friends can see your GPA and each class's letter grade for this semester, like Biology: A-. They never see percents or scores. When a class goes up a letter, friends can send you a high five."}[ui.prof.share];
+  return head+`
+  <section><div class="sec-h"><span>Add a friend</span></div><form id="fr-f" class="glass list" novalidate style="margin:0"><div class="fr"><input id="fr-u" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="21" placeholder="Their username" style="text-align:left" aria-label="Friend's username"><button class="ack" data-act="frAdd">Send request</button></div></form></section>
+  ${msg}
+  ${inc.length?`<section><div class="sec-h"><span>Friend requests</span><span>${inc.length}</span></div><div class="glass list">${inc.map(f=>`<div class="row"><span class="main">${who(f)}</span><button class="ack" data-act="frAccept" data-id="${f.id}">Accept</button><button class="ack" data-act="frDecline" data-id="${f.id}" style="color:var(--fg2)">Decline</button></div>`).join('')}</div></section>`:''}
+  ${F.high_fives.length?`<section><div class="sec-h"><span>High fives for you</span></div><div class="glass list">${F.high_fives.map(h=>`<div class="row"><span class="main"><div class="t">🙌 ${esc(h.name)} high-fived you</div><div class="s">${esc(h.class)} went up to ${esc(h.letter)} · ${ago(h.at)}</div></span></div>`).join('')}</div></section>`:''}
+  ${F.events.length?`<section><div class="sec-h"><span>Friends' news</span></div><div class="glass list">${F.events.map(e=>`<div class="row"><span class="main"><div class="t">${esc(e.name)}'s ${esc(e.class)} went up to ${esc(e.letter)}</div><div class="s">${ago(e.at)}</div></span>${e.mine?`<span class="meta">🙌 Sent</span>`:`<button class="ack" data-act="hi5" data-id="${e.id}">🙌 High five</button>`}</div>`).join('')}</div></section>`:''}
+  <section><div class="sec-h"><span>Your friends</span>${friends.length?`<span>${friends.length}</span>`:''}</div><div class="glass list">${L==null?`<div class="empty"><span class="spin"></span></div>`:friends.length?friends.map(f=>{
+    const cls=Array.isArray(f.classes)?f.classes:[];
+    const right=f.gpa!=null?`<span class="num" style="font-weight:700">${(+f.gpa).toFixed(2)}</span><span class="meta" style="margin-left:4px">GPA</span>`:'';
+    return `<div class="row" style="align-items:flex-start"><span class="main">${who(f)}${f.share==='none'||f.share==null?`<div class="s" style="margin-top:4px">Not sharing grades</div>`:''}${cls.length?`<div class="s" style="margin-top:4px">${cls.map(c=>`${esc(c.name)}: <b>${esc(c.letter)}</b>`).join(' · ')}</div>`:''}</span><span class="r" style="flex-direction:column;align-items:flex-end;gap:6px"><span>${right}</span><button class="ack" data-act="frRemove" data-id="${f.id}" data-confirm style="color:var(--fg2)">Remove</button></span></div>`;}).join(''):`<div class="row"><span class="main"><div class="s">No friends yet. Ask a friend for their username, or tell them yours: @${esc(ui.prof.username)}</div></span></div>`}</div></section>
+  ${out.length?`<section><div class="sec-h"><span>Requests you sent</span></div><div class="glass list">${out.map(f=>`<div class="row"><span class="main">${who(f)}<div class="s">Waiting for them to accept</div></span><button class="ack" data-act="frCancel" data-id="${f.id}" style="color:var(--fg2)">Cancel</button></div>`).join('')}</div></section>`:''}
+  <section><div class="sec-h"><span>What friends can see</span></div><div class="glass list"><div class="fr"><div class="seg">${shareOpts.map(([v,l])=>`<button type="button" class="${ui.prof.share===v?'on':''}" data-act="share" data-v="${v}" aria-pressed="${ui.prof.share===v}">${l}</button>`).join('')}</div></div><div class="row"><span class="main"><div class="s">${shareText}</div></span></div></div></section>`;
+}
+function renderTabs(){
+  const el=document.getElementById('tabs'); if(!el||el.hidden) return;
+  const tv=ui.route.view==='class'?ui.from:ui.route.view, n=incomingCount();
+  el.innerHTML=`<button class="tab ${tv==='dash'?'on':''}" data-act="dash">${ICON_D}Dashboard</button><button class="tab ${tv==='home'?'on':''}" data-act="home">${ICON_G}Grades</button><button class="tab ${tv==='friends'?'on':''}" data-act="friends" style="position:relative">${ICON_F}Friends${n?`<span class="tab-dot" aria-label="${n} friend request${n===1?'':'s'}">${n}</span>`:''}</button><button class="tab ${tv==='settings'?'on':''}" data-act="settings">${ICON_S}Settings</button>`;
 }
 
 /* ---------- first-time tour ---------- */
@@ -798,7 +916,8 @@ function authView(){
   const a=ui.auth, m=a.mode;
   return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Grade Book</div><h1>${m==='up'?'Create your account':m==='reset'?'Reset your password':m==='newpw'?'Choose a new password':'Sign in'}</h1></div>
    <p class="note" style="font-size:15px">${m==='reset'?"Enter your email and you'll get a link to reset your password.":m==='newpw'?'Type a new password for your account.':'Your grades save to your account, so they show up on your phone and your computer. Only you can see them.'}</p></header>
-  <form id="au-f" class="glass list" novalidate style="margin:0">${m==='up'?`<div class="fr"><label for="au-n">Name</label><input id="au-n" autocomplete="name" autocapitalize="words" value="${esc(a.name||'')}" placeholder="Your name"></div>`:''}${m==='newpw'?'':`<div class="fr"><label for="au-e">Email</label><input id="au-e" type="email" autocomplete="email" inputmode="email" value="${esc(a.email||'')}" placeholder="you@example.com"></div>`}${m==='reset'?'':`<div class="fr"><label for="au-p">${m==='newpw'?'New password':'Password'}</label><input id="au-p" type="password" autocomplete="${m==='up'||m==='newpw'?'new-password':'current-password'}" placeholder="${m==='up'||m==='newpw'?'At least 6 characters':'Password'}"></div>`}<button type="submit" hidden></button></form>
+  <form id="au-f" class="glass list" novalidate style="margin:0">${m==='up'?`<div class="fr"><label for="au-n">Name</label><input id="au-n" autocomplete="name" autocapitalize="words" value="${esc(a.name||'')}" placeholder="Your name"></div><div class="fr"><label for="au-u">Username</label><input id="au-u" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" value="${esc(a.username||'')}" placeholder="sam_lee"></div>`:''}${m==='newpw'?'':`<div class="fr"><label for="au-e">Email</label><input id="au-e" type="email" autocomplete="email" inputmode="email" value="${esc(a.email||'')}" placeholder="you@example.com"></div>`}${m==='reset'?'':`<div class="fr"><label for="au-p">${m==='newpw'?'New password':'Password'}</label><input id="au-p" type="password" autocomplete="${m==='up'||m==='newpw'?'new-password':'current-password'}" placeholder="${m==='up'||m==='newpw'?'At least 6 characters':'Password'}"></div>`}<button type="submit" hidden></button></form>
+  ${m==='up'?`<p class="note" style="margin-top:-10px">Friends add you by your username. Use 3 to 20 lowercase letters, numbers or _. You can't change it later.</p>`:''}
   <div id="au-msg" class="note" role="status" style="min-height:1.2em;margin-top:-10px;color:${a.ok?'var(--green)':'var(--red)'}">${esc(a.msg||'')}</div>
   <button class="btn block" data-act="auGo">${m==='up'?'Create account':m==='reset'?'Send reset link':m==='newpw'?'Save password':'Sign in'}</button>
   <div style="display:grid;gap:12px;justify-items:center;font-size:15px">
@@ -876,6 +995,7 @@ const ICON_Q='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const ICON_DOC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
 const ICON_D='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="8" rx="2"/><rect x="13.5" y="3.5" width="7" height="5" rx="2"/><rect x="3.5" y="14.5" width="7" height="6" rx="2"/><rect x="13.5" y="11.5" width="7" height="9" rx="2"/></svg>';
 const ICON_G='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14"/><path d="M8 15v-3M12 15V9M16 15v-5"/><path d="M3 19h18"/></svg>';
+const ICON_F='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.6 6.5-5.6s5.9 2 6.5 5.6"/><circle cx="17" cy="9" r="2.6"/><path d="M16.2 14.5c2.8-.3 4.7 1.4 5.3 4.5"/></svg>';
 const ICON_S='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.7 4.4V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg>';
 
 function render(){
@@ -885,13 +1005,12 @@ function render(){
   tabsEl.hidden=false;
   const r=ui.route; let c=null;
   if(r.view==='class'){c=findClass(r.id); if(!c) ui.route={view:'home'};}
-  app.innerHTML=ui.route.view==='settings'?settingsView():ui.route.view==='class'?classView(c):ui.route.view==='dash'?dashView():homeView();
+  app.innerHTML=ui.route.view==='settings'?settingsView():ui.route.view==='friends'?friendsView():ui.route.view==='class'?classView(c):ui.route.view==='dash'?dashView():homeView();
   const rk=ui.route.view+(ui.route.id||'');
   if(rk!==ui.lastRoute&&!reduced()){app.classList.remove('enter');void app.offsetWidth;app.classList.add('enter');} else if(rk===ui.lastRoute) app.classList.remove('enter');
   ui.lastRoute=rk; countUp(); if(ui.route.view==='dash') wireChart();
   if(tourAt>=0&&document.getElementById('tour')) requestAnimationFrame(placeTour); else maybeTour();
-  const tv=ui.route.view==='class'?ui.from:ui.route.view;
-  document.getElementById('tabs').innerHTML=`<button class="tab ${tv==='dash'?'on':''}" data-act="dash">${ICON_D}Dashboard</button><button class="tab ${tv==='home'?'on':''}" data-act="home">${ICON_G}Grades</button><button class="tab ${tv==='settings'?'on':''}" data-act="settings">${ICON_S}Settings</button>`;
+  renderTabs();
 }
 
 /* ---------- dashboard ---------- */
@@ -1191,6 +1310,15 @@ document.addEventListener('click',e=>{
     case 'range': ui.range=t.dataset.v; break;
     case 'focus': ui.focus=ui.focus===t.dataset.id?null:t.dataset.id; break;
     case 'settings': ui.route={view:'settings'}; ui.msg=''; break;
+    case 'friends': ui.route={view:'friends'}; ui.fr.msg=''; window.scrollTo(0,0); loadFriends(); break;
+    case 'setUser': e.preventDefault(); saveUsername(); return;
+    case 'frAdd': e.preventDefault(); addFriend(); return;
+    case 'frAccept': friendAct('respond_friend_request',{p_other:t.dataset.id,p_accept:true},"You're now friends."); return;
+    case 'frDecline': friendAct('respond_friend_request',{p_other:t.dataset.id,p_accept:false},'Request declined.'); return;
+    case 'frCancel': friendAct('remove_friend',{p_other:t.dataset.id},'Request cancelled.'); return;
+    case 'frRemove': friendAct('remove_friend',{p_other:t.dataset.id},'Friend removed.'); return;
+    case 'hi5': friendAct('high_five',{p_event:+t.dataset.id},'High five sent!'); return;
+    case 'share': setShare(t.dataset.v); return;
     case 'open': ui.from=ui.route.view==='dash'?'dash':'home'; ui.route={view:'class',id:t.dataset.id}; window.scrollTo(0,0); break;
     case 'wi': ui.wi=!ui.wi; break;
     case 'sem': S.curSem=t.dataset.id; save(); break;
@@ -1211,7 +1339,7 @@ document.addEventListener('click',e=>{
   }
   render();
 });
-document.addEventListener('submit',e=>{if(e.target.id==='au-f'){e.preventDefault();authSubmit();}});
+document.addEventListener('submit',e=>{if(e.target.id==='au-f'){e.preventDefault();authSubmit();} else if(e.target.id==='fr-f'){e.preventDefault();addFriend();} else if(e.target.id==='un-f'){e.preventDefault();saveUsername();}});
 document.addEventListener('input',e=>{if(e.target.dataset.su&&ui.setup){if(e.target.dataset.su==='name') ui.setup.name=e.target.value; else ui.setup.classes[+e.target.dataset.i]=e.target.value; return;}if(e.target.id==='q'){ui.q=e.target.value;const el=document.getElementById('sr');if(el)el.innerHTML=searchResults(ui.q);return;}if(e.target.dataset.did&&datesApi) datesApi.set(e.target);if(e.target.id==='i-m'&&rangeApi) rangeApi(false);if(e.target.closest('#c-cats')&&classSheetApi) classSheetApi.tot();});
 document.addEventListener('change',e=>{
   const t=e.target;

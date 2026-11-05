@@ -29,6 +29,14 @@ How it works:
 - `icon.svg`, `favicon.ico`, `icon-192.png`, `icon-512.png` and `apple-touch-icon.png` are the site icons. `og.png` is the picture shown when someone shares the link.
 - `terms.html` and `privacy.html` are the Terms and Privacy Policy. Their contact address is beckettdunne@gmail.com.
 
+## Friends
+
+Everyone picks a username at sign-up (3 to 20 lowercase letters, numbers or `_`, unique, can't be changed). Accounts made before usernames existed pick one the first time they open the Friends tab.
+
+- `profiles` holds each account's username, short name ("Sam L.") and sharing choice: `none` (default), `gpa`, or `letters`.
+- `friendships` has one row per pair, `pending` or `accepted`. `shared_stats` holds the GPA and class letters someone chose to share. `friend_events` and `high_fives` hold grade-ups and high fives.
+- The app only uses database functions for friends: `username_available`, `set_username`, `send_friend_request`, `respond_friend_request`, `remove_friend`, `get_friends`, `get_feed`, `high_five` and `record_grade_up`. Nobody can read `friendships`, `friend_events`, `high_fives` or anyone else's `shared_stats` directly. `get_friends` only returns grades for accepted friends, at the level each friend chose.
+
 Two accounts are free forever: beckettdunne@gmail.com and 29baberke@ecfs.org. To give someone else free access for good, run this in the SQL Editor with their email:
 
 ```sql

@@ -121,7 +121,25 @@ h1{font-family:var(--font-d);font-size:34px;line-height:1.1;font-weight:700;lett
 .need div{background:var(--fill);border-radius:14px;padding:10px 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .need b{font-weight:700}
 .need .ok{color:var(--green);font-size:13px;font-weight:600}
-.need .no{color:var(--red);font-size:13px;font-weight:600}
+.need .no{color:var(--red);font-size:13px;font-weight:600;text-align:right}
+.need .no small{display:block;font-size:11.5px;font-weight:500;color:var(--fg2);line-height:1.3;margin-top:2px}
+.calc-note .assume{display:block;margin-top:6px;padding:8px 10px;border-radius:10px;background:rgba(224,134,0,.1);color:var(--fg)}
+.setup-card{border-radius:20px;padding:16px;display:grid;gap:10px;border:1.5px solid var(--orange)}
+.setup-card .t{font-size:17px;font-weight:700;color:var(--orange)}
+.setup-card p{margin:0;font-size:14px;line-height:1.45;color:var(--fg2)}
+.guide{background:rgba(224,134,0,.1);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45}
+.guide .gt{display:block;font-size:15px;margin-bottom:4px}
+.guide ol{margin:4px 0 6px;padding-left:20px}.guide li{margin:3px 0}.guide p{margin:0;color:var(--fg2)}
+.cmp{display:flex;align-items:stretch;gap:8px;margin-top:2px}
+.cmp .side{flex:1;min-width:0;background:var(--fill);border-radius:14px;padding:8px 10px;display:grid;grid-template-columns:1fr auto;align-items:center;row-gap:2px}
+.cmp .side small{grid-column:1/-1;font-size:11px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.04em}
+.cmp .side b{font-size:20px;font-weight:800;letter-spacing:-.02em}
+.cmp .side .badge{min-width:34px;font-size:13px;padding:3px 6px}
+.cmp .side.wi{background:rgba(88,86,214,.12);box-shadow:inset 0 0 0 1.5px rgba(88,86,214,.35)}
+.cmp .arr{align-self:center;color:var(--fg3);font-weight:700}
+.cmp-d{font-size:13px;font-weight:600;color:var(--fg2)}.cmp-d.up{color:var(--green)}.cmp-d.down{color:var(--red)}
+.ipv{font-size:13px;line-height:1.4;padding:9px 12px;border-radius:12px;background:var(--fill);margin-top:-8px}
+.ipv b{font-weight:700}
 .need .n{font-weight:650}
 .note{font-size:13px;color:var(--fg2);line-height:1.45;margin:0}
 
@@ -563,6 +581,14 @@ function setupDone(){
   const sm={id:uid(),name:semName,classes:names.map((n,i)=>({id:uid(),name:n,credits:1,color:COLORS[i%COLORS.length],mode:'weighted',status:'',example:false,catsChecked:false,finalCat:null,finalPoints:100,categories:defaultCats()}))};
   S={v:1,updatedAt:0,name:(ui.acct&&ui.acct.name)||st.name.trim(),curSem:sm.id,semesters:[sm],scale:DEFAULT_SCALE.map(r=>({...r})),round:false,examples:false};
   save(); ui.setup=null; afterLoad();
+  // Walk through each new class so its categories come from the syllabus, not the samples.
+  walk={ids:sm.classes.map(c=>c.id),i:0}; setTimeout(walkNext,350);
+}
+let walk=null;
+function walkNext(){
+  if(!walk) return;
+  while(walk.i<walk.ids.length){ const c=findClass(walk.ids[walk.i]); if(c&&c.catsChecked===false){ classSheet(c,{step:walk.i+1,total:walk.ids.length}); return; } walk.i++; }
+  walk=null; render();
 }
 
 /* ---------- math ---------- */
@@ -810,7 +836,8 @@ const TOUR=[
 let tourAt=-1;
 function maybeTour(){
   if(tourAt>=0||!S||S.tourDone||ui.route.view!=='dash'||document.querySelector('.scrim')) return;
-  tourAt=0; setTimeout(()=>{ if(tourAt===0&&ui.route.view==='dash') showTour(); else tourAt=-1; },700);
+  if(walk) return;
+  tourAt=0; setTimeout(()=>{ if(tourAt===0&&ui.route.view==='dash'&&!walk&&!document.querySelector('.scrim')) showTour(); else tourAt=-1; },700);
 }
 function endTour(){
   tourAt=-1; const el=document.getElementById('tour'); if(el) el.remove();
@@ -885,14 +912,15 @@ function homeView(){
     `<button class="chip" data-act="editSem">Rename</button><button class="chip add" data-act="addSem">+ Semester</button>`;
   const rows=s.classes.map(c=>{
     const gr=classGrade(c,ui.wi); const L=gr==null?null:letterFor(gr);
-    const right=c.status?`<span class="badge g-S">${c.status}</span>`:gr==null?`<span class="meta">No grades</span>`:`<span class="num meta">${f1(gr)}%</span>${letterBadge(c.id,L)}`;
+    const real=ui.wi?classGrade(c,false):gr, changed=ui.wi&&gr!=null&&(real==null||Math.abs(gr-real)>=0.05);
+    const right=c.status?`<span class="badge g-S">${c.status}</span>`:gr==null?`<span class="meta">No grades</span>`:`${changed?`<span class="num meta" style="color:var(--fg3)">${real==null?'–':f1(real)+'%'} →</span>`:''}<span class="num meta" ${changed?'style="color:var(--fg);font-weight:600"':''}>${f1(gr)}%</span>${letterBadge(c.id,L)}`;
     return `<button class="row tap" data-act="open" data-id="${c.id}"><span class="dot" style="background:var(--c-${c.color})"></span><span class="main"><div class="t">${esc(c.name)}</div><div class="s">${+c.credits} credit${+c.credits===1?'':'s'} · ${c.mode==='points'?'Total points':'Weighted'}${c.status?' · not in GPA':''}${needsCheck(c)?' · <span style="color:var(--orange);font-weight:600">Check setup</span>':''}</div></span><span class="r">${right}<span class="chev">›</span></span></button>`;
   }).join('');
   return `<header class="lt"><div class="lt-row"><div><div class="eyebrow">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div><h1>Grades</h1></div>${wiSwitch()}</div><div class="chips">${chips}</div>
    <label class="search" for="q">${ICON_Q}<input id="q" type="search" placeholder="Search assignments" value="${esc(ui.q||'')}" autocomplete="off" aria-label="Search assignments in every class and semester"></label></header>
   <div id="sr" style="display:contents">${searchResults(ui.q)}</div>
   <section class="glass sum"><div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--fill)" stroke-width="11"/><circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" ${ringAnim}/></svg><div class="v"><b class="num" ${g?`data-count="1" data-key="gpa" data-val="${g.gpa.toFixed(2)}" data-dec="2"`:''}>${g?g.gpa.toFixed(2):'–'}</b><span>GPA</span></div></div>
-   <div class="stats"><div class="stat"><small>${esc(s.name)}</small><b class="num">${g?g.gpa.toFixed(2)+' GPA':'No graded classes'}</b></div><div class="stat"><small>Cumulative</small><b class="num">${cum?cum.gpa.toFixed(2):'–'}</b></div><div class="stat"><small>Credits in GPA</small><b class="num">${g?g.cr:0}</b></div></div></section>
+   <div class="stats"><div class="stat"><small>${esc(s.name)}</small><b class="num">${g?g.gpa.toFixed(2)+' GPA':'No graded classes'}</b></div><div class="stat"><small>Cumulative</small><b class="num">${cum?cum.gpa.toFixed(2):'–'}</b></div><div class="stat"><small>Credits in GPA</small><b class="num">${g?g.cr:0}</b></div>${ui.wi?(()=>{const rg=gpaOf(s.classes,false);return `<div class="stat"><small>Real GPA</small><b class="num">${rg?rg.gpa.toFixed(2):'–'}${rg&&g&&Math.abs(g.gpa-rg.gpa)>=0.005?` <span style="font-size:13px;color:${g.gpa>rg.gpa?'var(--green)':'var(--red)'}">${g.gpa>rg.gpa?'+':'−'}${Math.abs(g.gpa-rg.gpa).toFixed(2)} with what-if</span>`:''}</b></div>`;})():''}</div></section>
   <section class="glass list"><button class="row tap" data-act="report"><span class="rc-ic">${ICON_DOC}</span><span class="main"><div class="t">Report card</div><div class="s">Save a one-page summary for parents or a counselor</div></span><span class="chev">›</span></button></section>
   ${headsUp(warns)}
   ${S.examples?`<section class="glass banner"><span><b>These are example classes.</b> Explore, then remove them and add your own.</span><button class="btn ghost" data-act="clearEx">Remove examples</button></section>`:''}
@@ -912,12 +940,22 @@ function classView(c){
     return `<section><div class="sec-h"><span>${head}</span><span class="num">${st.pct==null?'–':f1(st.pct)+'%'}</span></div><div class="glass list">${items}<button class="row tap addrow" data-act="addItem" data-cat="${k.id}">+ Add assignment</button></div></section>`;
   }).join('');
   const tw=c.categories.reduce((a,k)=>a+(+k.weight||0),0);
-  const cw=wiFilter(warningsFor(c));
+  const unset=c.catsChecked===false&&!c.example;
+  const cw=wiFilter(warningsFor(c)).filter(w=>!(unset&&w.kind==='setup'));
+  const hasWi=c.categories.some(k=>k.items.some(i=>i.whatIf));
+  const setupCard=unset?`<section class="glass setup-card"><div class="t">Set up ${esc(c.name)}'s categories first</div>
+   <p>This class still uses sample categories (${esc(c.categories.map(k=>k.name+(c.mode==='points'?'':' '+(+k.weight)+'%')).join(', '))}). Until they match the syllabus, the grade below is only an estimate.</p>
+   <button class="btn block" data-act="editClass" data-id="${c.id}">Enter categories from the syllabus</button></section>`:'';
+  const cmp=ui.wi&&!c.status?(()=>{ const La=act==null?null:letterFor(act), d=act!=null&&gr!=null?gr-act:null;
+    return `<div class="cmp"><div class="side"><small>Real grade</small><b class="num">${act==null?'–':f1(act)+'%'}</b>${La?`<span class="badge ${gcls(La.l)}">${La.l}</span>`:''}</div><span class="arr" aria-hidden="true">→</span><div class="side wi"><small>With what-if</small><b class="num">${gr==null?'–':f1(gr)+'%'}</b>${L?`<span class="badge ${gcls(L.l)}">${L.l}</span>`:''}</div></div>
+     <div class="cmp-d ${d==null||Math.abs(d)<0.05?'':d>0?'up':'down'}">${!hasWi?'Add an assignment and turn on What-if score to try a grade.':d==null?'':Math.abs(d)<0.05?'No change from your real grade.':`${d>0?'+':'−'}${f1(Math.abs(d))}%${La&&L&&La.l!==L.l?` · ${La.l} → ${L.l}`:''}`}</div>`; })():'';
   return `<div class="nav"><button class="navbtn glass" data-act="${ui.from==='dash'?'dash':'home'}">‹ ${ui.from==='dash'?'Dashboard':'Grades'}</button><div class="nav-r"><button class="navbtn glass" data-act="importItems" data-id="${c.id}">Import</button><button class="navbtn glass" data-act="editClass" data-id="${c.id}">Edit</button></div></div>
-  <section class="glass hero"><div class="meta"><span class="dot" style="display:inline-block;background:var(--c-${c.color});margin-right:6px"></span>${esc(c.name)}</div>
+  ${setupCard}
+  <section class="glass hero"><div class="meta"><span class="dot" style="display:inline-block;background:var(--c-${c.color});margin-right:6px"></span>${esc(c.name)}${unset?' · <span style="color:var(--orange);font-weight:600">Estimate</span>':''}</div>
    <div class="hero-top"><div class="big num">${gr==null?'–':`<span data-count="1" data-key="c-${c.id}" data-val="${f1(gr)}" data-dec="1">${f1(gr)}</span>`}<small>%</small></div>${c.status?`<span class="badge g-S">${c.status}</span>`:L?letterBadge('h'+c.id,L):''}</div>
    <div class="bar"><i style="width:${gr==null?0:Math.min(100,gr)}%;background:var(--c-${c.color})"></i></div>
-   <div class="meta">${c.status?esc(STATUSES[c.status])+' · not counted in GPA':(L?`${L.gp.toFixed(1)} grade points · ${+c.credits} credit${+c.credits===1?'':'s'}`:'Add a score to see your grade')}${ui.wi&&act!=null&&Math.abs(act-gr)>0.005?` · actual ${f1(act)}%`:''}</div>
+   <div class="meta">${c.status?esc(STATUSES[c.status])+' · not counted in GPA':(L?`${L.gp.toFixed(1)} grade points · ${+c.credits} credit${+c.credits===1?'':'s'}`:'Add a score to see your grade')}</div>
+   ${cmp}
    ${cw.map(w=>`<div class="hero-warn ${w.sev}">${w.kind==='drop'?'↓':'⚠︎'} ${esc(w.short)}${w.kind==='drop'?` <button class="ack" data-act="ackDrop" data-id="${c.id}" style="margin-left:auto">Got it</button>`:w.kind==='setup'||w.kind==='weights'?` <button class="ack" data-act="editClass" data-id="${c.id}" style="margin-left:auto">Check</button>`:''}</div>`).join('')}
    <div>${wiSwitch()}</div></section>
   ${calcView(c)}
@@ -930,21 +968,23 @@ function calcView(c){
   const fc=finalCatOf(c);
   const chips=c.categories.map(k=>`<button class="chip ${k.id===fc.id?'on':''}" data-act="pickFinal" data-cls="${c.id}" data-id="${k.id}">${esc(k.name)}</button>`).join('');
   let body='';
-  const out=need=>need<=0?'<span class="ok">Locked in</span>':need>100?`<span class="no">Needs ${Math.round(need)}%</span>`:`<span class="n num">${f1(need)}%</span>`;
+  const out=need=>need<=0?'<span class="ok">Locked in</span>':need>100?`<span class="no"><span class="num">Needs ${f1(need)}%</span><small>Not reachable with the final alone</small></span>`:`<span class="n num">${f1(need)}%</span>`;
+  const list=a=>a.length<=1?a.join(''):a.length===2?a.join(' and '):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
   const targets=sortedScale().filter(r=>r.min>0);
   if(c.mode==='points'){
     const st=c.categories.map(k=>catStats(k,ui.wi));
     const E=st.reduce((a,s)=>a+s.earned,0),M=st.reduce((a,s)=>a+s.max,0),P=+c.finalPoints||0;
     body=`<div class="fl"><div class="fr"><label for="fp">Final is worth</label><input id="fp" class="num" inputmode="decimal" data-fp="${c.id}" value="${P}"><span class="meta">points</span></div></div>`;
-    if(M&&P>0) body+=`<div class="need">${targets.map(r=>{const T=S.round?r.min-.5:r.min;return `<div><b>${esc(r.l)}</b>${out(((T/100)*(M+P)-E)/P*100)}</div>`;}).join('')}</div><p class="note">You have ${E} of ${M} points so far. This assumes the final is the last graded work, so add it once you get the score back.</p>`;
+    if(M&&P>0) body+=`<div class="need">${targets.map(r=>{const T=S.round?r.min-.5:r.min;return `<div><b>${esc(r.l)}</b>${out(((T/100)*(M+P)-E)/P*100)}</div>`;}).join('')}</div><p class="note calc-note">You have ${f1(E)} of ${f1(M)} points so far${ui.wi?', counting what-if scores':''}. These results assume the final is the last graded work. If more assignments come before it, the score you need will change.</p>`;
     else body+=`<p class="note">Add some graded work and the final's point value to see what you need.</p>`;
   } else {
     const tw=c.categories.reduce((a,k)=>a+(+k.weight||0),0); const w=tw?(+fc.weight||0)/tw:0;
     const cur=classGrade(c,ui.wi,fc.id);
     if(!w) body=`<p class="note">"${esc(fc.name)}" has no weight. Give it a weight in Edit.</p>`;
     else if(cur==null) body=`<p class="note">Add scores in other categories first.</p>`;
-    else body=`<div class="need">${targets.map(r=>{const T=S.round?r.min-.5:r.min;return `<div><b>${esc(r.l)}</b>${out((T-cur*(1-w))/w)}</div>`;}).join('')}</div>
-      <p class="note">"${esc(fc.name)}" is ${f1(w*100)}% of your grade. Everything else averages ${f1(cur)}% right now. Categories with no scores yet are assumed to match that average.</p>`;
+    else { const empty=c.categories.filter(k=>k.id!==fc.id&&+k.weight>0&&catStats(k,ui.wi).pct==null).map(k=>`"${esc(k.name)}"`);
+      body=`<div class="need">${targets.map(r=>{const T=S.round?r.min-.5:r.min;return `<div><b>${esc(r.l)}</b>${out((T-cur*(1-w))/w)}</div>`;}).join('')}</div>
+      <p class="note calc-note">"${esc(fc.name)}" is ${f1(w*100)}% of your grade. Your other scored work averages <b>${f1(cur)}%</b>${ui.wi?', counting what-if scores':''}.${empty.length?` <span class="assume">${list(empty)} ${empty.length===1?"doesn't":"don't"} have scores yet, so these results assume you'll also average ${f1(cur)}% there. If you do better or worse, the score you need will change.</span>`:''}</p>`; }
   }
   return `<section class="glass calc"><h2 style="display:flex;align-items:center;gap:8px">What do I need on the final? ${helpBtn('final')}</h2>${c.mode==='points'?'':`<div class="chips">${chips}</div>`}${body}</section>`;
 }
@@ -1209,7 +1249,10 @@ async function deleteAccount(){
   if(curUid){ onUser(null); }
   toast('Your account was deleted.');
 }
-function closeSheet(){root.innerHTML='';onSave=null;rangeApi=null;importApi=null;pendingImport=null;datesApi=null;rcApi=null;}
+function closeSheet(){
+  // During the setup walk: Save moves to the next class; Later, Cancel or tapping outside ends the walk.
+  if(walk){ if(walk.pending){ walk.pending=false; walk.i++; setTimeout(walkNext,260); } else { walk=null; setTimeout(()=>{ if(!document.querySelector('.scrim')) render(); },0); } }
+  root.innerHTML='';onSave=null;rangeApi=null;previewApi=null;importApi=null;pendingImport=null;datesApi=null;rcApi=null;}
 const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
 const segHtml=(name,opts,cur)=>`<div class="seg" data-seg="${name}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" class="${v===cur?'on':''}">${l}</button>`).join('')}</div>`;
 const segVal=name=>{const b=root.querySelector(`[data-seg="${name}"] .on`);return b?b.dataset.v:'';};
@@ -1226,6 +1269,7 @@ function itemSheet(c,catId,item){
     <div class="fr"><label for="i-m">Out of</label><input id="i-m" class="num" inputmode="decimal" value="${esc(item.max)}"></div>
     <div class="fr"><label for="i-d">Date graded</label><input id="i-d" type="date" value="${esc(item.date||(isNew?todayStr():''))}"></div></div>
    <div id="i-rg" style="display:grid;gap:6px;margin-top:-8px"></div>
+   <div id="i-pv" class="ipv" role="status" aria-live="polite"></div>
    <div class="fl"><div class="fr"><label>What-if score</label><span style="flex:1"></span><button type="button" class="sw ${item.whatIf?'on':''}" id="i-w" data-act="toggleSw" aria-pressed="${item.whatIf}" aria-label="What-if score"></button></div></div>
    <p class="hint">What-if scores only count when the What-if switch is on. Use them to test a grade you haven't gotten yet.</p>
    ${isNew?'':delBtn('Delete assignment')}`,()=>{
@@ -1250,18 +1294,36 @@ function itemSheet(c,catId,item){
       <p class="hint" style="margin:0;${out?'color:var(--orange)':''}">${esc(k.name)}: usually ${lo}–${hi} points.${out?' This one is outside that range.':''}</p>`;
   };
   rangeApi(false);
+  // Live preview: what this score would do to the class grade.
+  previewApi=()=>{
+    const el=document.getElementById('i-pv'); if(!el) return;
+    const s=val('i-s'), m=val('i-m');
+    const now=classGrade(c,ui.wi), Ln=now==null?null:letterFor(now);
+    if(s===''||!isNum(s)||!isNum(m)||+m<=0){ el.innerHTML=`Type a score to see how it changes your grade.${now!=null?` Right now: <b>${f1(now)}%</b> (${Ln.l}).`:''}`; return; }
+    const kid=val('i-c'), cc={...c,categories:c.categories.map(k=>({...k,items:k.items.filter(i=>i.id!==item.id).concat(k.id===kid?[{id:'preview',score:+s,max:+m,whatIf:false}]:[])}))};
+    const after=classGrade(cc,ui.wi); if(after==null){ el.textContent=''; return; }
+    const La=letterFor(after), d=now==null?null:after-now;
+    el.innerHTML=`With this score: <b>${f1(after)}% (${La.l})</b>${now!=null?` · now <b>${f1(now)}% (${Ln.l})</b> · <span style="color:${d>=0.05?'var(--green)':d<=-0.05?'var(--red)':'var(--fg2)'};font-weight:600">${Math.abs(d)<0.05?'no change':(d>0?'+':'−')+f1(Math.abs(d))+'%'}</span>`:''}`;
+  };
+  previewApi();
 }
-let sheetDel=null, rangeApi=null;
+let sheetDel=null, rangeApi=null, previewApi=null;
 
-function classSheet(c){
-  const isNew=!c;
+function classSheet(c,guide){
+  const isNew=!c; let warnedWeights=false;
   c=c||{id:uid(),name:'',credits:1,color:COLORS[sem().classes.length%COLORS.length],mode:'weighted',status:'',finalCat:null,finalPoints:100,
     categories:defaultCats()};
   let cats=c.categories.map(k=>({...k})); let color=c.color;
   const catRows=()=>cats.map((k,i)=>`<div class="fr" data-ci="${i}"><input aria-label="Category name" data-cf="name" value="${esc(k.name)}" placeholder="Category"><input class="w num" inputmode="decimal" aria-label="Weight percent" data-cf="weight" value="${k.weight}" ${segVal('mode')==='points'?'hidden':''}><span class="meta" ${segVal('mode')==='points'?'hidden':''}>%</span>${segVal('mode')==='points'?`<input class="d num" inputmode="decimal" aria-label="Fewest points" data-cf="minPts" value="${k.minPts??''}" placeholder="min"><span class="meta">–</span><input class="d num" inputmode="decimal" aria-label="Most points" data-cf="maxPts" value="${k.maxPts??''}" placeholder="max">`:''}<button type="button" class="x" data-act="rmCat" data-i="${i}" aria-label="Remove category">⊖</button></div>`).join('');
   const sample=isNew||c.catsChecked===false;
-  openSheet(isNew?'New class':'Edit class',`
-   ${sample?`<p class="hint" style="margin:0;color:var(--orange);font-weight:600">The categories below are samples. Change them to match this class's syllabus, then tap ${isNew?'Add':'Save'}.</p>`:''}
+  const saveLabel=guide?(guide.step<guide.total?'Next':'Done'):isNew?'Add':'Save';
+  openSheet(guide?`Class ${guide.step} of ${guide.total}`:isNew?'New class':'Edit class',`
+   ${guide?`<div class="guide"><b class="gt">Set up ${esc(c.name)} from its syllabus</b>
+     <ol><li>Open the syllabus and find how your grade is calculated.</li>
+     <li>If it lists percents, like "Tests 40%, Homework 20%," keep <b>Weighted %</b> and make one category for each. They should add up to 100%.</li>
+     <li>If your grade is points earned out of points possible, pick <b>Total points</b>.</li></ol>
+     <p>No syllabus handy? Tap Later. Until you set this up, ${esc(c.name)}'s grade is only an estimate.</p></div>`
+   :sample?`<p class="hint" style="margin:0;color:var(--orange);font-weight:600">The categories below are samples. Change them to match this class's syllabus, then tap ${saveLabel}.</p>`:''}
    <div class="fl"><div class="fr"><label for="c-n">Name</label><input id="c-n" value="${esc(c.name)}" placeholder="Chemistry"></div>
     <div class="fr"><label for="c-cr">Credits</label>${helpBtn('credits')}<input id="c-cr" class="num" inputmode="decimal" value="${c.credits}"></div>
     <div class="fr"><label>Color</label><div class="colors" id="c-col">${COLORS.map(k=>`<button type="button" data-col="${k}" aria-label="${k}" class="${k===color?'on':''}" style="background:var(--c-${k})"></button>`).join('')}</div></div>
@@ -1273,11 +1335,17 @@ function classSheet(c){
    ${isNew?'':delBtn('Delete class')}`,()=>{
     readCats();
     if(!cats.length) return 'Add at least one category.';
+    if((segVal('mode')||'weighted')==='weighted'){
+      const t=cats.reduce((a,k)=>a+(+k.weight||0),0);
+      if(Math.abs(t-100)>0.01&&!warnedWeights){ warnedWeights=true; return `Your weights add up to ${+t.toFixed(2)}%, not 100%. Check the syllabus and fix them, or tap ${saveLabel} again to keep them.`; }
+    }
+    if(guide&&walk) walk.pending=true;
     c.name=val('c-n')||'Untitled class'; c.credits=isNum(val('c-cr'))?+val('c-cr'):1; c.color=color; c.status=val('c-st'); c.mode=segVal('mode')||'weighted';
     c.categories=cats.map(k=>({...k,name:k.name||'Category',weight:+k.weight||0,minPts:isNum(k.minPts)?+k.minPts:'',maxPts:isNum(k.maxPts)?+k.maxPts:'',items:k.items||[]}));
     c.example=false; c.catsChecked=true;
     if(isNew){sem().classes.push(c); ui.route={view:'class',id:c.id};}
-  },isNew?'Add':'Save');
+  },saveLabel);
+  if(guide){ const cb=root.querySelector('.sh-h [data-act="close"]'); if(cb) cb.textContent='Later'; }
   function readCats(){root.querySelectorAll('[data-ci]').forEach(row=>{const k=cats[+row.dataset.ci];row.querySelectorAll('[data-cf]').forEach(inp=>k[inp.dataset.cf]=inp.value);});}
   function drawCats(){const pts=segVal('mode')==='points';document.getElementById('c-cats').innerHTML=(cats.length?`<div class="fr" style="font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em;min-height:0;padding-block:8px"><span style="flex:1">Category</span>${pts?'<span style="width:110px;text-align:right">Points each</span>':'<span style="width:84px;text-align:right">Weight</span>'}<span style="width:26px"></span></div>`:'')+(catRows()||'<div class="fr meta">No categories yet. Add one for each part of your grade on the syllabus.</div>')+'<button type="button" class="row tap addrow" data-act="addCat" style="width:100%;padding:13px 14px;text-align:left;font-weight:600">+ Add category</button>';tot();}
   function tot(){const el=document.getElementById('c-tot');if(segVal('mode')==='points'){el.textContent='';return;}readCats();const t=cats.reduce((a,k)=>a+(+k.weight||0),0);el.textContent='Total '+t+'%';el.style.color=t===100?'var(--green)':'var(--orange)';}
@@ -1361,7 +1429,7 @@ document.addEventListener('click',e=>{
     case 'impRead': importApi&&importApi.read(); return;
     case 'impCk': {t.classList.toggle('on'); t.closest('.irow').classList.toggle('off',!t.classList.contains('on')); t.setAttribute('aria-pressed',t.classList.contains('on')); return;}
     case 'impReplace': {if(pendingImport){S=pendingImport; pendingImport=null; syncSeen(); save(); ui.msg='Replaced your grades with the file.'; closeSheet(); render();} return;}
-    case 'pickMax': document.getElementById('i-m').value=t.dataset.v; rangeApi&&rangeApi(false); return;
+    case 'pickMax': document.getElementById('i-m').value=t.dataset.v; rangeApi&&rangeApi(false); previewApi&&previewApi(); return;
     case 'toggleSw': t.classList.toggle('on'); t.setAttribute('aria-pressed',t.classList.contains('on')); return;
     case 'addCat': classSheetApi.addCat(); return;
     case 'rmCat': classSheetApi.rmCat(+t.dataset.i); return;
@@ -1400,10 +1468,10 @@ document.addEventListener('click',e=>{
   render();
 });
 document.addEventListener('submit',e=>{if(e.target.id==='au-f'){e.preventDefault();authSubmit();} else if(e.target.id==='fr-f'){e.preventDefault();addFriend();} else if(e.target.id==='un-f'){e.preventDefault();saveUsername();}});
-document.addEventListener('input',e=>{if(e.target.dataset.su&&ui.setup){if(e.target.dataset.su==='name') ui.setup.name=e.target.value; else ui.setup.classes[+e.target.dataset.i]=e.target.value; return;}if(e.target.id==='q'){ui.q=e.target.value;const el=document.getElementById('sr');if(el)el.innerHTML=searchResults(ui.q);return;}if(e.target.dataset.did&&datesApi) datesApi.set(e.target);if(e.target.id==='i-m'&&rangeApi) rangeApi(false);if(e.target.closest('#c-cats')&&classSheetApi) classSheetApi.tot();});
+document.addEventListener('input',e=>{if(e.target.dataset.su&&ui.setup){if(e.target.dataset.su==='name') ui.setup.name=e.target.value; else ui.setup.classes[+e.target.dataset.i]=e.target.value; return;}if(e.target.id==='q'){ui.q=e.target.value;const el=document.getElementById('sr');if(el)el.innerHTML=searchResults(ui.q);return;}if(e.target.dataset.did&&datesApi) datesApi.set(e.target);if(e.target.id==='i-m'&&rangeApi) rangeApi(false);if((e.target.id==='i-s'||e.target.id==='i-m')&&previewApi) previewApi();if(e.target.closest('#c-cats')&&classSheetApi) classSheetApi.tot();});
 document.addEventListener('change',e=>{
   const t=e.target;
-  if(t.id==='i-c'&&rangeApi){rangeApi(true);return;}
+  if(t.id==='i-c'&&rangeApi){rangeApi(true);if(previewApi)previewApi();return;}
   if(t.dataset.scale){const r=S.scale.find(r=>r.l===t.dataset.scale); if(r&&isNum(t.value)){r[t.dataset.f]=+t.value; syncSeen(); save();} render(); return;}
   if(t.dataset.fp){const c=findClass(t.dataset.fp); if(c&&isNum(t.value)){c.finalPoints=+t.value; save(); render();}}
 });

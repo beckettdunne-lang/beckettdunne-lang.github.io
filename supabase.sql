@@ -154,8 +154,8 @@ create policy "Update own grades" on public.gradebooks
 -- It only runs from the ensure_rls event trigger, so nobody needs to call it directly.
 revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
 
--- ---------- Switched to a $5 one-time purchase (no free trial) ----------
--- The trial columns and policies above still exist but no trial is ever started now.
+-- ---------- Switched to a $5 one-time purchase ----------
+-- The subscription-trial columns above are no longer used. See "One free day" at the end of this file.
 
 -- ---------- Friends: usernames, requests, sharing, high fives ----------
 create table public.profiles (
@@ -385,3 +385,38 @@ grant execute on function public.set_username(text), public.send_friend_request(
   public.remove_friend(uuid), public.get_friends(), public.get_feed(), public.high_five(bigint), public.record_grade_up(text, text) to authenticated;
 revoke execute on function public.username_available(text) from public;
 grant execute on function public.username_available(text) to anon, authenticated;
+
+-- ---------- One free day, then $5 ----------
+-- New accounts get 24 hours free with no card. After that they need the $5 purchase.
+alter table public.access alter column trial_ends_at set default (now() + interval '1 day');
+
+create or replace function public.start_trial()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.access (user_id, trial_ends_at)
+  values (new.id, now() + interval '1 day')
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+revoke execute on function public.start_trial() from public, anon, authenticated;
+
+-- Saving grades needs: free forever, paid, or a free day that hasn't ended.
+drop policy if exists "Add own grades" on public.gradebooks;
+drop policy if exists "Update own grades" on public.gradebooks;
+create policy "Add own grades" on public.gradebooks
+  for insert to authenticated with check (
+    (select auth.uid()) = user_id
+    and exists (select 1 from public.access a
+                where a.user_id = (select auth.uid())
+                  and (a.free_forever or a.paid_at is not null or a.trial_ends_at > now())));
+create policy "Update own grades" on public.gradebooks
+  for update to authenticated using ((select auth.uid()) = user_id) with check (
+    (select auth.uid()) = user_id
+    and exists (select 1 from public.access a
+                where a.user_id = (select auth.uid())
+                  and (a.free_forever or a.paid_at is not null or a.trial_ends_at > now())));

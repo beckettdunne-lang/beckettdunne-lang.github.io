@@ -135,12 +135,13 @@ Email confirmation is on by default, so new users confirm their email before the
 
 ## The $5 purchase
 
-Grade Book costs $5, paid once. There's no free trial and no subscription. People make an account, then buy Grade Book at Lemon Squeezy checkout before they can add classes. There's no way to use Grade Book without an account.
+New accounts get one free day: 24 hours from when the account is made, with no card. After that, Grade Book costs $5, paid once, with no subscription. Nobody is charged automatically; they buy it at Lemon Squeezy checkout when they choose. There's no way to use Grade Book without an account.
 
 How it works:
 
-- `supabase.sql` makes the `access` table: one row per account with `paid_at` and `free_forever`. People can read their own row but can't change it.
-- Saving grades needs `free_forever` or `paid_at`. Reading, deleting, and downloading grades always work.
+- `supabase.sql` makes the `access` table: one row per account with `trial_ends_at` (account creation + 24 hours), `paid_at` and `free_forever`. People can read their own row but can't change it.
+- Saving grades needs `free_forever`, `paid_at`, or a `trial_ends_at` in the future. Reading, deleting, and downloading grades always work.
+- To give someone more free time, set their `trial_ends_at` later in the SQL Editor, for example `update public.access set trial_ends_at = now() + interval '3 days' where user_id = (select id from auth.users where lower(email) = 'friend@example.com');`.
 - `supabase/functions/lemon-webhook` gets Lemon Squeezy's `order_created` and `order_refunded` events, checks the signature, and sets or clears `paid_at`. It still has code for subscription events from when Grade Book had a free trial; those events are no longer sent.
 - `supabase/functions/cancel-trial` is left over from the free trial. The app no longer calls it.
 - `supabase/functions/delete-account` runs when someone taps Delete account in Settings. It deletes the account; the grades and access rows go with it.

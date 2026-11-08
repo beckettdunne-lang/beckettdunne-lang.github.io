@@ -413,15 +413,24 @@ const isGate=v=>v==='loading'||v==='auth'||v==='setup'||v==='paywall'||v==='welc
 /* ---------- one-time purchase (Lemon Squeezy) ---------- */
 const PRICE='$5';
 const CHECKOUT=(()=>{const u=String(window.GB_CHECKOUT||'').trim(); return /^https:\/\//.test(u)?u:'';})();
-// ui.pay.state: free (free forever) | paid | none (hasn't bought it yet)
-const hasAccess=()=>!ui.pay||ui.pay.state==='free'||ui.pay.state==='paid';
+// ui.pay.state: free (free forever) | paid | trial (first 24 hours, no card) | none (free day over, hasn't bought it)
+const hasAccess=()=>!ui.pay||ui.pay.state==='free'||ui.pay.state==='paid'||ui.pay.state==='trial';
 const locked=()=>!hasAccess();
+let trialTimer=null;
 async function loadAccess(u){
-  const {data,error}=await sb.from('access').select('paid_at,free_forever').eq('user_id',u.id).maybeSingle();
+  const {data,error}=await sb.from('access').select('paid_at,free_forever,trial_ends_at').eq('user_id',u.id).maybeSingle();
   if(error) return;
-  const d=data||{};
-  ui.pay={state:d.free_forever?'free':d.paid_at?'paid':'none'};
+  const d=data||{}, ends=Date.parse(d.trial_ends_at)||0;
+  ui.pay={state:d.free_forever?'free':d.paid_at?'paid':ends>Date.now()?'trial':'none',ends,hadTrial:!!ends};
+  // When the free day ends while the app is open, switch to the Buy screen.
+  clearTimeout(trialTimer);
+  if(ui.pay.state==='trial'&&ends-Date.now()<864e5*2) trialTimer=setTimeout(()=>{ if(ui.pay&&ui.pay.state==='trial'){ ui.pay.state='none'; afterLoad(); } },ends-Date.now()+500);
 }
+function trialLeftText(){
+  const ms=ui.pay&&ui.pay.ends?ui.pay.ends-Date.now():0, h=Math.floor(ms/36e5), m=Math.max(1,Math.ceil((ms%36e5)/6e4));
+  return h>=1?`${h} hour${h===1?'':'s'}${h<3?` ${m} min`:''} left`:`${m} minute${m===1?'':'s'} left`;
+}
+const trialEndText=()=>ui.pay&&ui.pay.ends?new Date(ui.pay.ends).toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit'}):'';
 function checkoutUrl(){
   const q=[['checkout[custom][user_id]',curUid],['checkout[email]',ui.acct&&ui.acct.email],['checkout[name]',ui.acct&&ui.acct.name]].filter(([,v])=>v).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   return CHECKOUT+(CHECKOUT.includes('?')?'&':'?')+q;
@@ -436,13 +445,15 @@ async function payCheck(manual){
   const u=(await sb.auth.getUser()).data.user; if(!u) return;
   const prev=ui.pay&&ui.pay.state;
   ui.checking=true; ui.payMsg=''; render();
+  const owned=()=>ui.pay&&(ui.pay.state==='paid'||ui.pay.state==='free');
   for(let i=0;i<(manual?1:10);i++){
     try{ await loadAccess(u); }catch(e){}
-    if(hasAccess()) break;
+    if(owned()) break;
     if(!manual) await new Promise(r=>setTimeout(r,3000));
   }
   ui.checking=false;
-  if(hasAccess()){ afterLoad(); unlocked(prev); return; }
+  if(owned()){ afterLoad(); unlocked(prev); return; }
+  if(hasAccess()){ afterLoad(); if(!manual) toast("Your payment hasn't shown up yet. It can take a minute."); return; }
   ui.payMsg=manual?'No payment found yet. If you just paid, wait a minute and try again.':'Your payment hasn\'t shown up yet. It can take a minute. Tap "I already paid" to check again.';
   render();
 }
@@ -510,7 +521,7 @@ async function onUser(u){
   ui.pay=null; try{ await loadAccess(u); }catch(e){}
   ui.prof=null; ui.fr={list:null,feed:null}; loadProfile();
   afterLoad();
-  if(/[?&]paid=/.test(location.search)){ history.replaceState(null,'',location.pathname); if(locked()) payCheck(false); }
+  if(/[?&]paid=/.test(location.search)){ history.replaceState(null,'',location.pathname); if(ui.pay&&ui.pay.state!=='paid'&&ui.pay.state!=='free') payCheck(false); }
 }
 // Pick up changes made on another device when you come back to this tab or app.
 document.addEventListener('visibilitychange',async()=>{
@@ -1027,14 +1038,15 @@ function welcomeView(){
   return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">gradebook.fun</div><h1>Grade Book</h1></div>
    <p class="note" style="font-size:16px">A simple place to keep your grades and work out your GPA.</p></header>
   <section class="glass list">${pts.map(([t,d])=>`<div class="row"><span class="main"><div class="t">${t}</div><div class="s">${d}</div></span></div>`).join('')}</section>
-  <p class="note" style="font-size:15px;padding:0 4px">Grade Book costs ${PRICE}, paid once. There's no subscription and no monthly fee. You make an account, then buy it at checkout.</p>
+  <p class="note" style="font-size:15px;padding:0 4px">Try it free for 1 day, no card needed. After that, Grade Book costs ${PRICE}, paid once. There's no subscription and no monthly fee, and you're never charged automatically.</p>
   <button class="btn block" data-act="auMode" data-v="up">Create an account</button>
   <div style="display:grid;justify-items:center"><button class="addrow" data-act="auMode" data-v="in" style="font-size:15px">Already have an account? Sign in</button></div>
   ${legalLinks()}`;
 }
 function paywallView(){
-  return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Grade Book</div><h1>Buy Grade Book</h1></div>
-   <p class="note" style="font-size:15px">Grade Book costs ${PRICE}, paid once. Buy it to start adding your classes and grades.</p></header>
+  const over=ui.pay&&ui.pay.hadTrial;
+  return `<header class="lt" style="padding-top:40px"><div><div class="eyebrow">Grade Book</div><h1>${over?'Your free day is over':'Buy Grade Book'}</h1></div>
+   <p class="note" style="font-size:15px">${over?`Buy Grade Book for ${PRICE}, paid once, to keep adding classes and grades. Everything you entered is still saved.`:`Grade Book costs ${PRICE}, paid once. Buy it to start adding your classes and grades.`}</p></header>
   <section class="glass list">
     <div class="row"><span class="main"><div class="t">${PRICE}, one time</div><div class="s">You pay once at checkout. There's no subscription, and you won't be charged again.</div></span></div>
     <div class="row"><span class="main"><div class="t">Yours to keep</div><div class="s">Your account and grades stay available on your phone and your computer.</div></span></div></section>
@@ -1050,7 +1062,11 @@ function payRow(){
   const p=ui.pay; if(!p) return '';
   if(p.state==='free') return `<div class="row"><span class="main"><div class="t">Grade Book is free for you</div><div class="s">Your account has free access for good.</div></span></div>`;
   if(p.state==='paid') return `<div class="row"><span class="main"><div class="t">Grade Book is paid for</div><div class="s">Thanks for buying it. You have it for good.</div></span></div>`;
+  if(p.state==='trial') return trialRow();
   return '';
+}
+function trialRow(){
+  return `<div class="row"><span class="main"><div class="t">Free day: ${trialLeftText()}</div><div class="s">Your free day ends ${trialEndText()}. After that, buy Grade Book for ${PRICE}, paid once, to keep using it. No card needed until then.</div></span>${CHECKOUT?`<button class="ack" data-act="buy">Buy ${PRICE}</button>`:''}</div>`;
 }
 
 function settingsView(){
@@ -1198,6 +1214,7 @@ function dashView(){
     const w=classGrade(x.c,false,null,asOf(x.i.date)), wo=classGrade(x.c,false,null,i=>i!==x.i&&(!i.date||i.date<=x.i.date)), eff=w==null||wo==null?null:w-wo;
     return `<button class="row tap" data-act="open" data-id="${x.c.id}"><span class="main"><div class="t">${esc(x.i.name)}</div><div class="s num">${esc(x.c.name)} · ${shortDate(x.i.date)} · ${+x.i.score} / ${+x.i.max}</div></span><span class="chg num ${eff==null||Math.abs(eff)<.05?'':eff>0?'up':'down'}">${eff==null?'':(eff>=0?'+':'−')+Math.abs(eff).toFixed(1)+'%'}</span></button>`;}).join('');
   return `<header class="lt"><div><div class="eyebrow">${dateTitle} · ${esc(s.name)}</div><h1>Hi ${esc(firstName()||'there')}</h1></div></header>
+  ${ui.pay&&ui.pay.state==='trial'?`<section class="glass list">${trialRow()}</section>`:''}
   <section class="tiles"><div class="tile glass"><small>Semester GPA</small><b class="num" ${gNow!=null?`data-count="1" data-key="dgpa" data-val="${gNow.toFixed(2)}" data-dec="2"`:''}>${gNow!=null?gNow.toFixed(2):'–'}</b>${delta(gNow,gMo,2,'')}${gMo!=null&&gNow!=null?` since ${shortDate(mo)}</span>`:''}</div>
    <div class="tile glass"><small>Average</small><b class="num">${aNow!=null?`<span data-count="1" data-key="davg" data-val="${f1(aNow)}" data-dec="1">${f1(aNow)}</span>%`:'–'}</b>${delta(aNow,aWk,1,'')}${aWk!=null&&aNow!=null?` since ${shortDate(wk)}</span>`:''}</div>
    <div class="tile glass"><small>Graded</small><b class="num">${items.length}</b><span class="d">${recentN} since ${shortDate(wk)}</span></div></section>

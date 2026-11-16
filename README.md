@@ -104,12 +104,12 @@ The free Supabase plan pauses a project after about a week with no activity. The
 2. If it says the project is paused, click **Restore project**. It takes a few minutes. Grades and accounts are kept.
 3. Check the **Actions** tab for "Keep Supabase awake". If it says scheduled runs are turned off, click the button to turn them back on.
 
-### Someone didn't get their confirmation email
+### Someone didn't get a password-reset email
 
-Supabase's built-in email sender only sends a few emails per hour, so emails can be late when several people sign up at once.
+New accounts don't need a confirmation email (Confirm email is off). Password-reset emails still go through Supabase's built-in sender, which only sends a few emails per hour.
 
-- Ask them to wait an hour, check spam, and use **Forgot your password?** on the sign-in page if they still can't get in.
-- If it keeps happening, either turn off **Confirm email** in Supabase (Authentication > Sign In / Providers > Email), or connect a free email service like Resend under Authentication > Emails > SMTP settings.
+- Ask them to wait an hour, check spam, and try **Forgot your password?** again.
+- If it keeps happening, connect a free email service like Resend under Authentication > Emails > SMTP settings.
 
 ### Change someone's username
 
@@ -135,7 +135,7 @@ To have Claude change the site later, start a Claude Code session with this repo
 3. **Authentication > URL Configuration:** set **Site URL** to `https://gradebook.fun/` and add the same address under **Redirect URLs**. Confirmation and password-reset emails link back here.
 4. **Project Settings > API:** copy the **Project URL** and the **anon / publishable** key into `supabase-config.js`. Don't use the service_role or secret key.
 
-Email confirmation is on by default, so new users confirm their email before they can sign in. Supabase's built-in email sender only sends a few emails per hour. That's fine for a few friends. To skip confirmation, turn off **Confirm email** under Authentication > Sign In / Providers > Email.
+**Confirm email** is turned off (Authentication > Sign In / Providers > Email), so new users are signed in as soon as they create an account. The app handles both settings: if you turn confirmation back on, sign-up shows "Open the link we emailed" instead. Supabase's built-in email sender only sends a few emails per hour, which still matters for password-reset emails.
 
 ## The $5 purchase
 

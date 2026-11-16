@@ -9,8 +9,9 @@ window.GB_SUPABASE = {
   key: "sb_publishable_20xxW3icj2l9oVubwAggDA_AhR9hwBU"
 };
 
-// Lemon Squeezy checkout link for the $5 one-time purchase.
-// Lemon Squeezy dashboard > Products > Grade Book > Share, then copy the checkout link.
-// It looks like https://YOURSTORE.lemonsqueezy.com/buy/1234abcd-....
+// Stripe Payment Link for the $5 one-time purchase.
+// Stripe dashboard > Payment Links > Grade Book > copy the link. It looks like https://buy.stripe.com/....
+// Test-mode links start with https://buy.stripe.com/test_ and only take test cards.
+// The app adds ?client_reference_id=<account id> so the stripe-webhook function knows who paid.
 // While this is empty, the app shows "Buying Grade Book opens soon" instead of a Buy button.
-window.GB_CHECKOUT = "https://gradebook.lemonsqueezy.com/checkout/buy/c8d34ac5-1648-4a2c-a3f9-a5154c823fc4";
+window.GB_CHECKOUT = "https://buy.stripe.com/fZu8wPbVLaoK4rJ6X63cc00";

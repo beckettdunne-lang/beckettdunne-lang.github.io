@@ -16,30 +16,34 @@ Where things are:
 |---|---|
 | The website's code | This repo on github.com, branch `main` |
 | Accounts, grades, who paid, friends | supabase.com, project "Gradebook" |
-| Payments, orders, refunds | app.lemonsqueezy.com, store "gradebook" |
+| Payments, orders, refunds | dashboard.stripe.com |
 | The domain gradebook.fun | hostinger.com |
 
-### Go live when Lemon Squeezy approves the store
+### Set up Stripe payments
 
-Do these in order. Until step 6, nobody can pay real money.
+Payments go through a Stripe Payment Link. The app adds the buyer's account ID to the link, and the `stripe-webhook` function marks that account paid when Stripe says the payment went through.
 
-1. **Payouts.** In Lemon Squeezy, open Settings > Payouts and make sure a bank account or PayPal is added. This is where your money goes.
-2. **Copy the product to live mode.** With test mode still on, open Products, click the **...** next to Grade Book, and choose **Copy to live mode**.
-3. **Turn off test mode.** It's the switch at the bottom left of the Lemon Squeezy dashboard.
-4. **Check the live product.** Open Products > Grade Book. It should be a **Single payment** of $5. Under **Confirmation modal**, the button link should be `https://gradebook.fun/?paid=1`. Save if you changed anything.
-5. **Add the live webhook.** Open Settings > Webhooks and click **+**. Test and live mode have separate webhooks, so this is needed even though the test one exists.
-   - Callback URL: `https://fnbcebulnbhsgpgynbon.supabase.co/functions/v1/lemon-webhook`
-   - Signing secret: the same one you used for the test webhook. If you don't remember it, make up a new long password, and also put it in Supabase: Edge Functions > Secrets > `LEMONSQUEEZY_WEBHOOK_SECRET` > edit. Then the test webhook will stop working, which is fine once you're live.
-   - Events: check `order_created` and `order_refunded`.
-   - Click **Save webhook**.
-6. **Put the live checkout link in the app.**
-   1. In Lemon Squeezy, open Products > Grade Book, click **Share**, and copy the checkout link. It starts with `https://gradebook.lemonsqueezy.com/`.
-   2. On github.com, open this repo and click the file `supabase-config.js`.
-   3. Click the pencil icon (**Edit this file**) at the top right of the file.
-   4. Find the line that starts with `window.GB_CHECKOUT =`. Replace only the link between the quote marks with your new link. Keep the quote marks and the `;` at the end.
-   5. Click **Commit changes...**, keep **Commit directly to the main branch**, and click **Commit changes**.
-   6. Wait 1 to 2 minutes, then check the **Actions** tab. The newest run should have a green check. See "The site didn't update" below if it's red.
-7. **Test with real money.** In a private browser window, make a new account on gradebook.fun, tap **Buy Grade Book for $5**, and pay with a real card. You should land back in Grade Book with confetti. Then refund yourself (see "Refund someone" below). The app should go back to the Buy screen for that account.
+1. **Payment Link.** In Stripe, open **Payment Links** and create one for a product called Grade Book, $5, one-time. Under **After payment**, choose **Don't show confirmation page**, and enter `https://gradebook.fun/?paid=1`. This sends buyers back to the app.
+2. **Webhook.** In Stripe, open **Developers > Webhooks** (it may be called **Workbench** or **Event destinations**) and add an endpoint:
+   - Endpoint URL: `https://fnbcebulnbhsgpgynbon.supabase.co/functions/v1/stripe-webhook`
+   - Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded`.
+   - After saving, reveal the **Signing secret**. It starts with `whsec_`.
+3. **Secret.** In Supabase, open **Edge Functions > Secrets** and add `STRIPE_WEBHOOK_SECRET` with the signing secret from step 2.
+4. **Payouts.** In Stripe, finish activating the account and add a bank account, so payments can be paid out. The Stripe account must belong to someone 18 or older.
+5. **Test with real money.** In a private browser window, make a new account on gradebook.fun, tap **Buy Grade Book for $5**, and pay with a real card. You should land back in Grade Book with confetti. Then refund yourself (see "Refund someone" below). The app should go back to the Buy screen for that account.
+
+Stripe's test mode has its own Payment Links, webhooks and signing secrets. A test link starts with `https://buy.stripe.com/test_` and only takes test cards like 4242 4242 4242 4242. If you test that way, add a test-mode webhook and use its signing secret in Supabase, then switch everything back to live.
+
+### Change the checkout link
+
+Do this if you make a new Payment Link.
+
+1. In Stripe, open **Payment Links**, click Grade Book, and copy its link. It starts with `https://buy.stripe.com/`.
+2. On github.com, open this repo and click the file `supabase-config.js`.
+3. Click the pencil icon (**Edit this file**) at the top right of the file.
+4. Find the line that starts with `window.GB_CHECKOUT =`. Replace only the link between the quote marks with your new link. Keep the quote marks and the `;` at the end.
+5. Click **Commit changes...**, keep **Commit directly to the main branch**, and click **Commit changes**.
+6. Wait 1 to 2 minutes, then check the **Actions** tab. The newest run should have a green check. See "The site didn't update" below if it's red.
 
 ### Give someone free access
 
@@ -58,9 +62,9 @@ To take free access away, run the same thing with `free_forever = false, paid_at
 
 ### Refund someone
 
-1. In Lemon Squeezy, open **Orders** and find their order. You can search by email.
-2. Click the order, then **Refund**, and confirm.
-3. That's it. Lemon Squeezy tells Grade Book, and their account goes back to the Buy screen. Their grades stay saved.
+1. In Stripe, open **Payments** and find their payment. You can search by email.
+2. Click the payment, then **Refund**, and refund the full $5.
+3. That's it. Stripe tells Grade Book, and their account goes back to the Buy screen. Their grades stay saved. A partial refund doesn't change their access.
 
 The Terms say all sales are final, so you don't have to give refunds. You can still give one if you decide to, for example after an accidental double purchase. If you'd rather refund them and let them keep using Grade Book, refund them and then give them free access (above).
 
@@ -118,7 +122,7 @@ where user_id = (select id from auth.users where lower(email) = 'friend@example.
 
 ### Delete someone's account
 
-People can do this themselves in Settings > Delete account. To do it for them: in Supabase, open **Authentication > Users**, find their email, click the **...** menu, and choose **Delete user**. Their grades, friends and payment record are deleted with it. This doesn't refund them; do that in Lemon Squeezy first if needed.
+People can do this themselves in Settings > Delete account. To do it for them: in Supabase, open **Authentication > Users**, find their email, click the **...** menu, and choose **Delete user**. Their grades, friends and payment record are deleted with it. This doesn't refund them; do that in Stripe first if needed.
 
 ### Make a code change with Claude
 
@@ -135,14 +139,15 @@ Email confirmation is on by default, so new users confirm their email before the
 
 ## The $5 purchase
 
-New accounts get one free day: 24 hours from when the account is made, with no card. After that, Grade Book costs $5, paid once, with no subscription. Nobody is charged automatically; they buy it at Lemon Squeezy checkout when they choose. There's no way to use Grade Book without an account.
+New accounts get one free day: 24 hours from when the account is made, with no card. After that, Grade Book costs $5, paid once, with no subscription. Nobody is charged automatically; they buy it at Stripe checkout when they choose. There's no way to use Grade Book without an account.
 
 How it works:
 
 - `supabase.sql` makes the `access` table: one row per account with `trial_ends_at` (account creation + 24 hours), `paid_at` and `free_forever`. People can read their own row but can't change it.
 - Saving grades needs `free_forever`, `paid_at`, or a `trial_ends_at` in the future. Reading, deleting, and downloading grades always work.
 - To give someone more free time, set their `trial_ends_at` later in the SQL Editor, for example `update public.access set trial_ends_at = now() + interval '3 days' where user_id = (select id from auth.users where lower(email) = 'friend@example.com');`.
-- `supabase/functions/lemon-webhook` gets Lemon Squeezy's `order_created` and `order_refunded` events, checks the signature, and sets or clears `paid_at`. It still has code for subscription events from when Grade Book had a free trial; those events are no longer sent.
+- `supabase/functions/stripe-webhook` gets Stripe's `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded` events, checks the `Stripe-Signature` header, and sets or clears `paid_at`. It finds the account from the checkout's `client_reference_id`, which the app adds to the Payment Link.
+- `supabase/functions/lemon-webhook` is from when payments went through Lemon Squeezy. It still works for old Lemon Squeezy orders but gets no new ones.
 - `supabase/functions/cancel-trial` is left over from the free trial. The app no longer calls it.
 - `supabase/functions/delete-account` runs when someone taps Delete account in Settings. It deletes the account; the grades and access rows go with it.
 - `icon.svg`, `favicon.ico`, `icon-192.png`, `icon-512.png` and `apple-touch-icon.png` are the site icons. `og.png` is the picture shown when someone shares the link.
@@ -163,19 +168,7 @@ update public.access set free_forever = true, paid_at = coalesce(paid_at, now())
 where user_id = (select id from auth.users where lower(email) = 'friend@example.com');
 ```
 
-### Set up Lemon Squeezy
-
-The Lemon Squeezy account must belong to someone 18 or older.
-
-1. **Product:** Products > New product. Name it Grade Book and choose **Single payment**, $5. Under **Confirmation modal**, set the button link to `https://gradebook.fun/?paid=1`.
-2. **Checkout link:** on the product, click Share and copy the link. Put it in `window.GB_CHECKOUT` in `supabase-config.js`.
-3. **Webhook:** Settings > Webhooks.
-   - URL: `https://fnbcebulnbhsgpgynbon.supabase.co/functions/v1/lemon-webhook`
-   - Signing secret: a long random password.
-   - Events: `order_created` and `order_refunded`.
-4. **Secret:** in Supabase, Edge Functions > Secrets, set `LEMONSQUEEZY_WEBHOOK_SECRET` to the signing secret from step 3.
-
-Test mode and live mode each need their own product and webhook.
+Payment setup is under "Set up Stripe payments" near the top of this file.
 
 ## Move grades from the Claude version
 

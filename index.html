@@ -410,7 +410,7 @@ const SB_LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/+esm';
 let sb=null, curUid=null;
 const isGate=v=>v==='loading'||v==='auth'||v==='setup'||v==='paywall'||v==='welcome';
 
-/* ---------- one-time purchase (Lemon Squeezy) ---------- */
+/* ---------- one-time purchase (Stripe Payment Link) ---------- */
 const PRICE='$5';
 const CHECKOUT=(()=>{const u=String(window.GB_CHECKOUT||'').trim(); return /^https:\/\//.test(u)?u:'';})();
 // ui.pay.state: free (free forever) | paid | trial (first 24 hours, no card) | none (free day over, hasn't bought it)
@@ -432,7 +432,12 @@ function trialLeftText(){
 }
 const trialEndText=()=>ui.pay&&ui.pay.ends?new Date(ui.pay.ends).toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit'}):'';
 function checkoutUrl(){
-  const q=[['checkout[custom][user_id]',curUid],['checkout[email]',ui.acct&&ui.acct.email],['checkout[name]',ui.acct&&ui.acct.name]].filter(([,v])=>v).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  // Stripe Payment Links take client_reference_id (which account is paying) and prefilled_email.
+  // Lemon Squeezy links take checkout[custom][user_id], checkout[email] and checkout[name].
+  const stripe=/(^|\.)stripe\.com$/i.test((()=>{try{return new URL(CHECKOUT).hostname;}catch(e){return '';}})());
+  const q=(stripe?[['client_reference_id',curUid],['prefilled_email',ui.acct&&ui.acct.email]]
+    :[['checkout[custom][user_id]',curUid],['checkout[email]',ui.acct&&ui.acct.email],['checkout[name]',ui.acct&&ui.acct.name]])
+    .filter(([,v])=>v).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   return CHECKOUT+(CHECKOUT.includes('?')?'&':'?')+q;
 }
 function buyNow(){ if(CHECKOUT&&curUid) location.href=checkoutUrl(); }

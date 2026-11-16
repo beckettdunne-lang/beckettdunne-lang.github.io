@@ -1242,7 +1242,7 @@ function deleteAccountSheet(){
   const p=ui.pay||{}, paid=p.state==='paid';
   root.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Delete account"><div class="grab"></div><div class="sh-h"><button data-act="close">Cancel</button><h3>Delete account</h3><span style="width:60px"></span></div><div class="form" id="sf">
    <p class="note" style="font-size:15px;color:var(--fg)">This permanently deletes your account${ui.acct&&ui.acct.email?` (${esc(ui.acct.email)})`:''} and all your grades. You can't undo it.</p>
-   ${paid?`<p class="note" style="font-size:15px">Deleting your account doesn't refund your ${PRICE}. If you want a refund, email beckettdunne@gmail.com before you delete it.</p>`:''}
+   ${paid?`<p class="note" style="font-size:15px">Deleting your account doesn't refund your ${PRICE}. All sales are final.</p>`:''}
    <button class="btn ghost block" data-act="export">Download my grades first</button>
    <p id="del-msg" class="note" role="alert" style="color:var(--red);min-height:1.2em;margin:0"></p>
    <button class="btn danger block" data-act="delAcctGo" data-confirm>Delete my account</button>

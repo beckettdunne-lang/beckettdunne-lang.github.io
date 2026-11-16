@@ -62,7 +62,7 @@ To take free access away, run the same thing with `free_forever = false, paid_at
 2. Click the order, then **Refund**, and confirm.
 3. That's it. Lemon Squeezy tells Grade Book, and their account goes back to the Buy screen. Their grades stay saved.
 
-The Terms promise a full refund if they ask within 14 days of paying. If you'd rather refund them and let them keep using Grade Book, refund them and then give them free access (above).
+The Terms say all sales are final, so you don't have to give refunds. You can still give one if you decide to, for example after an accidental double purchase. If you'd rather refund them and let them keep using Grade Book, refund them and then give them free access (above).
 
 ### See who has paid
 

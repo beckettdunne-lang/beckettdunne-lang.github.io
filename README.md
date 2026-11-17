@@ -26,7 +26,7 @@ Payments go through a Stripe Payment Link. The app adds the buyer's account ID t
 1. **Payment Link.** In Stripe, open **Payment Links** and create one for a product called Grade Book, $5, one-time. Under **After payment**, choose **Don't show confirmation page**, and enter `https://gradebook.fun/?paid=1`. This sends buyers back to the app.
 2. **Webhook.** In Stripe, open **Developers > Webhooks** (it may be called **Workbench** or **Event destinations**) and add an endpoint:
    - Endpoint URL: `https://fnbcebulnbhsgpgynbon.supabase.co/functions/v1/stripe-webhook`
-   - Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded`.
+   - Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` and `charge.refund.updated`.
    - After saving, reveal the **Signing secret**. It starts with `whsec_`.
 3. **Secret.** In Supabase, open **Edge Functions > Secrets** and add `STRIPE_WEBHOOK_SECRET` with the signing secret from step 2.
 4. **Payouts.** In Stripe, finish activating the account and add a bank account, so payments can be paid out. The Stripe account must belong to someone 18 or older.
@@ -146,7 +146,7 @@ How it works:
 - `supabase.sql` makes the `access` table: one row per account with `trial_ends_at` (account creation + 24 hours), `paid_at` and `free_forever`. People can read their own row but can't change it.
 - Saving grades needs `free_forever`, `paid_at`, or a `trial_ends_at` in the future. Reading, deleting, and downloading grades always work.
 - To give someone more free time, set their `trial_ends_at` later in the SQL Editor, for example `update public.access set trial_ends_at = now() + interval '3 days' where user_id = (select id from auth.users where lower(email) = 'friend@example.com');`.
-- `supabase/functions/stripe-webhook` gets Stripe's `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `charge.refunded` events, checks the `Stripe-Signature` header, and sets or clears `paid_at`. It finds the account from the checkout's `client_reference_id`, which the app adds to the Payment Link.
+- `supabase/functions/stripe-webhook` gets Stripe's `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` and `charge.refund.updated` events (the last one gives access back if a refund is cancelled or fails), checks the `Stripe-Signature` header, and sets or clears `paid_at`. It finds the account from the checkout's `client_reference_id`, which the app adds to the Payment Link.
 - `supabase/functions/lemon-webhook` is from when payments went through Lemon Squeezy. It still works for old Lemon Squeezy orders but gets no new ones.
 - `supabase/functions/cancel-trial` is left over from the free trial. The app no longer calls it.
 - `supabase/functions/delete-account` runs when someone taps Delete account in Settings. It deletes the account; the grades and access rows go with it.

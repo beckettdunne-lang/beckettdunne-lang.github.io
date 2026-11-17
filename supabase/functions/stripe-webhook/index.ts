@@ -1,5 +1,6 @@
 // Stripe webhook for Grade Book.
-// Stripe calls this after someone pays through the Grade Book Payment Link, and after a refund.
+// Stripe calls this after someone pays through the Grade Book Payment Link, after a refund,
+// and when a refund is cancelled or fails.
 // It checks Stripe's signature, then sets or clears paid_at in public.access.
 //
 // The app opens the Payment Link with ?client_reference_id=<the account's user id>, so the
@@ -86,6 +87,15 @@ Deno.serve(async (req) => {
       .eq("order_id", String(obj.payment_intent)).eq("free_forever", false);
     if (error) { console.error("refund failed", error); return reply(500, "Could not save"); }
     return reply(200, "Marked refunded");
+  }
+
+  // A refund that was cancelled or failed: the money stayed with us, so give access back.
+  if ((type === "charge.refund.updated" || type === "refund.updated" || type === "refund.failed") && obj.object === "refund") {
+    if (!(obj.status === "canceled" || obj.status === "failed") || !obj.payment_intent) return reply(200, "Refund still active");
+    const { error } = await db.from("access").update({ paid_at: new Date().toISOString(), note: `stripe (refund ${obj.status})` })
+      .eq("order_id", String(obj.payment_intent)).eq("note", "refunded").is("paid_at", null);
+    if (error) { console.error("restore after refund failed", error); return reply(500, "Could not save"); }
+    return reply(200, "Restored access");
   }
 
   return reply(200, "Ignored " + type);

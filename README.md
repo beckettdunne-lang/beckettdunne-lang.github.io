@@ -151,7 +151,7 @@ How it works:
 - `supabase/functions/cancel-trial` is left over from the free trial. The app no longer calls it.
 - `supabase/functions/delete-account` runs when someone taps Delete account in Settings. It deletes the account; the grades and access rows go with it.
 - `icon.svg`, `favicon.ico`, `icon-192.png`, `icon-512.png` and `apple-touch-icon.png` are the site icons. `og.png` is the picture shown when someone shares the link.
-- `terms.html` and `privacy.html` are the Terms and Privacy Policy. Their contact address is beckettdunne@gmail.com.
+- `terms.html` and `privacy.html` are the Terms and Privacy Policy. Their contact address is grade-book@foundable.app.
 
 ## Friends
 
